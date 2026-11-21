@@ -113,6 +113,7 @@ export interface Review {
   justification: string;
   ipr_conclusions: string;
   self_assessment_submitted: boolean;
+  self_assessment_submitted_at: string | null;
   ipr_id: number | null;
   scale: { value: number; label: string }[];
   updated_at: string;
@@ -243,6 +244,7 @@ export interface SelfAssessment {
   items: Record<string, { score: number | null; comment: string }>;
   summary: string;
   submitted_at: string | null;
+  open: boolean;
 }
 
 export interface IPRGoal {

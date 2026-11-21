@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Lock, Pencil, Plus, Share2, PenLine, Trash2, X } from "lucide-react";
+import { ClipboardList, Lock, Pencil, Plus, Share2, PenLine, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import type { Criterion, Note } from "@/lib/types";
@@ -10,6 +10,43 @@ import { Badge, Button, Card, CardHeader, ErrorBox, Input, Sentiment, Spinner, T
 
 export function useCriteria() {
   return useQuery({ queryKey: ["criteria"], queryFn: () => api<Criterion[]>("/criteria"), staleTime: Infinity });
+}
+
+// Metoda FUKO - informacja zwrotna oparta na faktach: Fakty, Uczucia (reakcja), Konsekwencje, Oczekiwania.
+// W dzienniku obserwacji najważniejsze są F i K (to dowody do oceny); U i O pomagają przygotować rozmowę.
+const FUKO = [
+  { key: "F", label: "Fakty", hint: "co konkretnie się wydarzyło: kiedy, w jakiej sprawie, co pracownik zrobił (bez ocen i przymiotników)" },
+  { key: "U", label: "Uczucia", hint: "Twoja reakcja jako przełożonego, np. „doceniam”, „zaniepokoiło mnie” - nie oceniaj osoby" },
+  { key: "K", label: "Konsekwencje", hint: "jaki był skutek dla zespołu, sprawy, obywatela lub terminu" },
+  { key: "O", label: "Oczekiwania", hint: "co dalej: co utrzymać albo co zmienić, ewentualne wsparcie" },
+];
+const FUKO_TEMPLATE = FUKO.map((f) => `${f.label}: `).join("\n");
+
+function FukoGuide({ onUse }: { onUse: () => void }) {
+  return (
+    <details className="rounded-md border border-border bg-white/60 text-xs">
+      <summary className="flex cursor-pointer items-center gap-1.5 px-3 py-1.5 font-medium text-slate-700">
+        <ClipboardList className="h-3.5 w-3.5 text-primary" aria-hidden /> Notatka metodą FUKO - fakty zamiast opinii
+      </summary>
+      <div className="space-y-2 px-3 pb-3">
+        <ul className="space-y-1">
+          {FUKO.map((f) => (
+            <li key={f.key}>
+              <strong className="mr-1 inline-block w-4 text-primary">{f.key}</strong>
+              <strong>{f.label}</strong> - {f.hint}
+            </li>
+          ))}
+        </ul>
+        <p className="text-muted">
+          Przykład: „F: 12.03 przygotował analizę ryzyk do projektu X dzień przed terminem. U: doceniam samodzielność. K: zespół zdążył
+          uwzględnić uwagi przed komitetem. O: proszę o podobne podsumowanie przy kolejnym etapie.”
+        </p>
+        <Button size="sm" variant="secondary" type="button" onClick={onUse}>
+          Wstaw szablon FUKO
+        </Button>
+      </div>
+    </details>
+  );
 }
 
 export function NoteComposer({ employeeId, placeholder, managerView }: { employeeId: number; placeholder?: string; managerView?: boolean }) {
@@ -32,8 +69,9 @@ export function NoteComposer({ employeeId, placeholder, managerView }: { employe
       }}
       className="space-y-2"
     >
+      {managerView && <FukoGuide onUse={() => setText((t) => (t.trim() ? `${t.trim()}\n${FUKO_TEMPLATE}` : FUKO_TEMPLATE))} />}
       <Textarea
-        rows={2}
+        rows={managerView && text.includes("Fakty:") ? 5 : 2}
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={placeholder ?? "Co konkretnie się wydarzyło? Np. „Poprowadził spotkanie z wykonawcą, ustalił harmonogram i rozesłał notatkę w 2 h”."}

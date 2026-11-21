@@ -19,7 +19,7 @@ from app.security import get_current_user
 from app.services.access import direct_report_ids, get_review_for, is_manager_of
 from app.services.audit import audit
 from app.services.process import absences
-from app.services.reviews import people_names, review_entries
+from app.services.reviews import notes_for_review, people_names, review_entries
 
 router = APIRouter(tags=["hr-partner"])
 
@@ -80,6 +80,16 @@ def ai_conversation_prep(review_id: int, kind: Literal["opening", "feedback", "a
         "self_rows": [],
         "signals": [s for s in employee_signals(session, emp.id)["signals"] if s["severity"] != "info"],
     }
+    if kind in ("assessment", "difficult"):
+        # notatki przypisane do kryteriów - podstawa informacji zwrotnej „sytuacja - zachowanie - skutek”
+        period_notes, tags = notes_for_review(session, review)
+        detail = []
+        for rc, c in entries:
+            tagged = [n for n in period_notes if any(t.criterion_id == c.id for t in tags.get(n.id, []))]
+            detail.append({"name": c.name, "score": rc.score, "justification": rc.justification,
+                           "notes": [{"id": n.id, "date": n.date.isoformat(), "text": n.text, "sentiment": n.sentiment}
+                                     for n in tagged[-3:]]})
+        ctx["criteria_detail"] = detail
     sa = session.exec(select(SelfAssessment).where(SelfAssessment.review_id == review.id)).first()
     if kind in ("assessment", "difficult") and sa and sa.submitted_at:
         ctx["self_rows"] = [{"name": c.name, "manager_score": rc.score,

@@ -106,10 +106,12 @@ def reminders_for(session: Session, user: User, today: date | None = None, scope
             elif r.status in ("observation", "draft", "submitted") and r.due_date and (r.due_date - today).days <= soon:
                 sa_done = session.exec(select(SelfAssessment).where(SelfAssessment.review_id == r.id,
                                                                     SelfAssessment.submitted_at.is_not(None))).first()
+                can_self = r.status in ("observation", "draft") and not sa_done
                 out.append(_item("review_due_employee", "Zbliża się termin Twojej oceny okresowej",
                                  "Przełożony zaprosi Cię na rozmowę oceniającą." + (
-                                     "" if sa_done else " Przed rozmową wypełnij samoocenę."),
-                                 r.due_date, link if sa_done else f"{link}/self", today))
+                                     " Wypełnij samoocenę, zanim przełożony przekaże ocenę do rozmowy." if can_self
+                                     else ""),
+                                 r.due_date, f"{link}/self" if can_self else link, today))
             elif r.status == "acknowledged" and r.acknowledged_at:
                 od = dl.objection_deadline(r.acknowledged_at)
                 if today <= od:

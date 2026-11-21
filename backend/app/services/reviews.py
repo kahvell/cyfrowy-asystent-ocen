@@ -157,6 +157,7 @@ def serialize_review(session: Session, review: Review, *, viewer_is_reviewer: bo
         "justification": "" if hide else review.justification,
         "ipr_conclusions": "" if hide else review.ipr_conclusions,
         "self_assessment_submitted": bool(sa and sa.submitted_at),
+        "self_assessment_submitted_at": sa.submitted_at.date().isoformat() if sa and sa.submitted_at else None,
         "ipr_id": ipr.id if ipr else None,
         "scale": [{"value": k, "label": v} for k, v in SCALE.items()],
         "updated_at": review.updated_at.isoformat(),

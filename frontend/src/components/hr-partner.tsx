@@ -9,13 +9,22 @@ import type { Suggestion } from "@/lib/types";
 import { cn, fmtDate, modelLabel } from "@/lib/utils";
 
 export interface PrepPayload {
+  summary?: string[];
   goal: string;
   agenda: string[];
   questions: string[];
   communication_tips: string[];
   difficult: { situation: string; how: string }[];
   wellbeing: string[];
+  feedback?: { criterion: string; score: number | null; kind: "docenienie" | "rozwoj" | "dopytaj"; say: string; source_note_ids: number[] }[];
+  watch_out?: string[];
 }
+
+const FEEDBACK_KIND = {
+  docenienie: { label: "docenić", tone: "green" },
+  rozwoj: { label: "do rozwoju", tone: "amber" },
+  dopytaj: { label: "dopytać", tone: "slate" },
+} as const;
 
 export interface HrSignal {
   code: string;
@@ -50,7 +59,9 @@ export function ConversationPrep({ reviewId, kind, bare }: { reviewId: number; k
   const body = (
     <div className="space-y-3">
       <p className="text-sm text-slate-600">
-        Wirtualny HR partner przygotuje cel, przebieg, pytania i wskazówki do {KIND_LABEL[kind]} na podstawie dziennika obserwacji.
+        {kind === "assessment"
+          ? "Przed rozmową oceniającą: podsumowanie okresu, przebieg rozmowy, informacja zwrotna dla każdego kryterium (z odwołaniem do notatek), pytania i to, na co uważać."
+          : `Wirtualny HR partner przygotuje cel, przebieg, pytania i wskazówki do ${KIND_LABEL[kind]} na podstawie dziennika obserwacji.`}
       </p>
       <Button variant="ai" className="w-full" onClick={() => m.mutate()} loading={m.isPending}>
         <PenLine className="h-4 w-4" aria-hidden /> Przygotuj mnie do {KIND_LABEL[kind]}
@@ -66,7 +77,7 @@ export function ConversationPrep({ reviewId, kind, bare }: { reviewId: number; k
       <CardHeader
         title={
           <span className="inline-flex items-center gap-2">
-            <HeartHandshake className="h-4 w-4 text-ai" aria-hidden /> HR partner
+            <HeartHandshake className="h-4 w-4 text-ai" aria-hidden /> {kind === "assessment" ? "HR partner: przygotowanie do rozmowy oceniającej" : "HR partner"}
           </span>
         }
       />
@@ -80,6 +91,15 @@ function PrepView({ prep }: { prep: Suggestion<PrepPayload> }) {
   return (
     <div className="space-y-3 ai-draft rounded-md p-3 text-sm">
       <AiLabel model={modelLabel(prep.model)} />
+      {p.summary && p.summary.length > 0 && (
+        <Section title="Podsumowanie okresu oceny">
+          <ul className="list-disc space-y-0.5 pl-5">
+            {p.summary.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
       <Section title="Cel rozmowy">
         <p>{p.goal}</p>
       </Section>
@@ -112,6 +132,37 @@ function PrepView({ prep }: { prep: Suggestion<PrepPayload> }) {
                 <strong>{d.situation}.</strong> {d.how}
               </li>
             ))}
+          </ul>
+        </Section>
+      )}
+      {p.watch_out && p.watch_out.length > 0 && (
+        <Section title="Na co uważać">
+          <ul className="list-disc space-y-0.5 pl-5">
+            {p.watch_out.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {p.feedback && p.feedback.length > 0 && (
+        <Section title="Informacja zwrotna - kryterium po kryterium">
+          <ul className="space-y-2">
+            {p.feedback.map((f) => {
+              const k = FEEDBACK_KIND[f.kind] ?? FEEDBACK_KIND.dopytaj;
+              return (
+                <li key={f.criterion} className="rounded-md border border-ai-border/50 bg-white/70 p-2">
+                  <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+                    <strong>{f.criterion}</strong>
+                    {f.score != null && <span className="text-xs text-muted">{f.score} pkt</span>}
+                    <Badge tone={k.tone}>{k.label}</Badge>
+                  </div>
+                  <p>{f.say}</p>
+                  {f.source_note_ids.length > 0 && (
+                    <p className="mt-0.5 text-xs text-muted">Notatki: {f.source_note_ids.map((id) => `#${id}`).join(", ")}</p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </Section>
       )}

@@ -37,7 +37,6 @@ from app.services.notify import notify_employee, notify_hr, notify_reviewer
 from app.services.process import (
     CRITERIA_FIELDS,
     EVALUATION_FIELDS,
-    EVALUATION_STATUSES,
     deadline_base,
     editable_fields,
     is_repeat_review,
@@ -491,6 +490,13 @@ def start_evaluation(review_id: int, user: User = Depends(get_current_user), ses
             review.appointment_year = review.appointment_year or emp.appointment_year
             review.civil_grade = review.civil_grade or emp.civil_grade
             review.civil_grade_date = review.civil_grade_date or emp.civil_grade_date
+    if review.status == "observation":
+        sa = session.exec(select(SelfAssessment).where(SelfAssessment.review_id == review.id,
+                                                       SelfAssessment.submitted_at.is_not(None))).first()
+        if not sa:
+            notify_employee(session, review, "Wypełnij samoocenę przed rozmową oceniającą",
+                            "Przełożony rozpoczął przygotowanie oceny. Samoocenę możesz przekazać do czasu, "
+                            "gdy przełożony przekaże ocenę do rozmowy oceniającej.")
     return _transition(session, review, user, {"observation"}, "draft")
 
 
@@ -503,7 +509,7 @@ def submit_review(review_id: int, user: User = Depends(get_current_user), sessio
         raise HTTPException(409, {"message": "Ocena zawiera krytyczne braki", "warnings": warnings})
     review.submitted_at = utcnow()
     notify_employee(session, review, "Zbliża się rozmowa oceniająca",
-                    "Przełożony przygotował ocenę. Przed rozmową możesz wypełnić samoocenę.")
+                    "Przełożony przygotował ocenę i zaprosi Cię na rozmowę oceniającą (§ 10).")
     return _transition(session, review, user, {"draft"}, "submitted")
 
 
@@ -796,6 +802,8 @@ class SelfItem(BaseModel):
     comment: str = ""
 
 
+SELF_ASSESSMENT_STATUSES = {"observation", "draft"}
+
 class SelfAssessmentIn(BaseModel):
     items: dict[int, SelfItem]
     summary: str = ""
@@ -811,6 +819,7 @@ def _sa_out(sa: SelfAssessment | None, review: Review, session: Session) -> dict
         "items": sa.items if sa else {},
         "summary": sa.summary if sa else "",
         "submitted_at": sa.submitted_at.isoformat() if sa and sa.submitted_at else None,
+        "open": review.status in SELF_ASSESSMENT_STATUSES,  # okno samooceny: etapy II-III
     }
 
 
@@ -832,8 +841,11 @@ def put_self_assessment(review_id: int, body: SelfAssessmentIn, user: User = Dep
     review = get_review_for(session, user, review_id)
     if user.employee_id != review.employee_id:
         raise HTTPException(403, "Samoocenę wypełnia oceniany")
-    if review.status not in ("observation", *EVALUATION_STATUSES):
-        raise HTTPException(409, "Samoocenę wypełnia się w okresie oceny, przed sporządzeniem oceny")
+    # samoocena powstaje niezależnie od oceny przełożonego: do etapu III włącznie; od etapu IV oceniany
+    # widzi już oceny cząstkowe przełożonego, więc samoocena jest zamknięta (porównanie robi przełożony przed rozmową)
+    if review.status not in SELF_ASSESSMENT_STATUSES:
+        raise HTTPException(409, "Samoocenę wypełnia się w okresie oceny i w czasie przygotowania oceny - "
+                                 "przed przekazaniem oceny do rozmowy oceniającej")
     valid_ids = {c.id for _, c in review_entries(session, review)}
     for cid, item in body.items.items():
         if cid not in valid_ids:
@@ -849,6 +861,9 @@ def put_self_assessment(review_id: int, body: SelfAssessmentIn, user: User = Dep
     sa.updated_at = utcnow()
     if body.submit:
         sa.submitted_at = utcnow()
+        notify_reviewer(session, review, "Oceniany przekazał samoocenę",
+                        "Porównanie z samooceną i pytania do rozmowy będą dostępne po przekazaniu oceny do rozmowy "
+                        "oceniającej (etap IV) - tak Twoja ocena powstaje niezależnie.")
     session.add(sa)
     audit(session, user, "submit" if body.submit else "save", "self_assessment", review.id)
     session.commit()

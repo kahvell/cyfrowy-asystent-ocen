@@ -300,13 +300,25 @@ class DifficultCase(BaseModel):
     how: str
 
 
+class FeedbackItem(BaseModel):
+    """Jak przekazać informację zwrotną dla jednego kryterium - z odwołaniem do notatek z dziennika."""
+    criterion: str
+    score: int | None = None
+    kind: str = "dopytaj"  # docenienie | rozwoj | dopytaj (normalizowane po odpowiedzi modelu)
+    say: str
+    source_note_ids: list[int] = Field(default_factory=list)
+
+
 class ConversationPrepResult(BaseModel):
+    summary: list[str] = Field(default_factory=list)  # podsumowanie okresu oceny przed rozmową oceniającą
     goal: str
     agenda: list[str]
     questions: list[str]
     communication_tips: list[str]
     difficult: list[DifficultCase] = Field(default_factory=list)
     wellbeing: list[str] = Field(default_factory=list)
+    feedback: list[FeedbackItem] = Field(default_factory=list)
+    watch_out: list[str] = Field(default_factory=list)
 
 
 CONV_GOALS = {
@@ -356,6 +368,43 @@ _QUESTIONS = {
 }
 _QUESTIONS["difficult"] = _QUESTIONS["assessment"]
 
+_WATCH_OUT = [
+    "Mów o faktach i zachowaniach z całego okresu oceny, nie o cechach osoby („spóźnił się z raportem 3 razy”, "
+    "a nie „jest niesolidny”).",
+    "Najpierw wysłuchaj, jak pracownik ocenia miniony okres - dopiero potem przedstaw swoją ocenę.",
+    "Oddziel docenienie od obszarów do rozwoju; „kanapka” (pochwała - krytyka - pochwała) rozmywa przekaz.",
+    "Nie porównuj z innymi pracownikami - oceniasz względem oczekiwań dla stanowiska i ustaleń z rozmowy "
+    "rozpoczynającej.",
+    "Przy każdym obszarze do rozwoju ustal jedno konkretne działanie i wsparcie - to wejdzie do wniosków do IPR.",
+]
+
+
+def _feedback_items(criteria_detail: list[dict]) -> list[FeedbackItem]:
+    """Heurystyka: dla każdego kryterium jedna wskazówka - docenić (≥ 7 pkt), omówić rozwój (≤ 5) albo dopytać."""
+    out = []
+    for c in criteria_detail:
+        score, notes = c.get("score"), c.get("notes") or []
+        pos = [n for n in notes if n.get("sentiment") == "positive"]
+        neg = [n for n in notes if n.get("sentiment") == "negative"]
+        if score is None:
+            continue
+        if score >= 7 and (pos or notes):
+            n = (pos or notes)[-1]
+            out.append(FeedbackItem(criterion=c["name"], score=score, kind="docenienie", source_note_ids=[n["id"]],
+                                    say=f"Doceń konkretnie: {n['date']} - „{n['text'][:140]}”. Powiedz, jaki był efekt "
+                                        "i dlaczego to ważne dla zespołu lub obywateli."))
+        elif score <= 5 and (neg or notes):
+            n = (neg or notes)[-1]
+            out.append(FeedbackItem(criterion=c["name"], score=score, kind="rozwoj", source_note_ids=[n["id"]],
+                                    say=f"Sytuacja - zachowanie - skutek: odwołaj się do {n['date']}: „{n['text'][:140]}”. "
+                                        "Zapytaj o przyczyny i ustalcie jedno konkretne działanie na przyszłość."))
+        else:
+            out.append(FeedbackItem(criterion=c["name"], score=score, kind="dopytaj",
+                                    say="W dzienniku brak notatek do tego kryterium - poproś pracownika o przykłady "
+                                        "sytuacji z okresu oceny, zanim utwierdzisz się w ocenie."))
+    return out
+
+
 _TIPS = ["Zacznij od pytania otwartego i słuchaj - niech pracownik mówi więcej niż Ty.",
          "Mów o faktach i zachowaniach (sytuacja - zachowanie - skutek), nie o cechach osoby.",
          "Doceniaj konkretnie: co zrobił(a), jaki był efekt, dlaczego to ważne.",
@@ -365,7 +414,9 @@ _TIPS = ["Zacznij od pytania otwartego i słuchaj - niech pracownik mówi więce
 def conversation_prep(kind: str, ctx: dict, people: list[str]) -> PipelineResult:
     """ctx: employee_name, position, duties, criteria[], notes[] {date, text, sentiment}, weak[], strong[],
     self_rows[], signals[] {title, message}, negative (bool)."""
+    ctx = {"criteria_detail": [], **ctx}
     prompt, version = render_prompt("conversation_prep", kind=kind, goal=CONV_GOALS[kind], **ctx)
+    allowed_notes = {n["id"] for c in ctx["criteria_detail"] for n in c.get("notes") or []}
 
     def heuristic() -> ConversationPrepResult:
         fill = {"criteria": ", ".join(ctx.get("criteria") or []) or "-",
@@ -393,10 +444,46 @@ def conversation_prep(kind: str, ctx: dict, people: list[str]) -> PipelineResult
         wellbeing = [f"{s['title']}: {s['message']}" for s in signals[:3]]
         if wellbeing:
             questions.append("Jak się czujesz z obecną ilością pracy? Czy coś możemy zmienić?")
-        return ConversationPrepResult(goal=CONV_GOALS[kind], agenda=agenda, questions=questions,
-                                      communication_tips=_TIPS, difficult=difficult, wellbeing=wellbeing)
+        assessment = kind in ("assessment", "difficult")
+        watch = list(_WATCH_OUT) if assessment else []
+        scores = {c["score"] for c in ctx["criteria_detail"] if c.get("score") is not None}
+        if assessment and len(scores) == 1 and len(ctx["criteria_detail"]) > 2:
+            watch.insert(0, "Wszystkie oceny cząstkowe są takie same - sprawdź, czy to nie efekt halo; omów każde "
+                            "kryterium osobno, na przykładach.")
+        summary: list[str] = []
+        if assessment:
+            detail = ctx["criteria_detail"]
+            n_notes = len(ctx.get("notes") or [])
+            summary.append(f"Okres oceny w dzienniku: {n_notes} obserwacji" + (
+                f", od {ctx['notes'][0]['date']} do {ctx['notes'][-1]['date']}." if n_notes else "."))
+            if ctx.get("strong"):
+                summary.append("Mocne strony (7-9 pkt): " + ", ".join(ctx["strong"]) + ".")
+            mid_low = [c["name"] for c in detail if c.get("score") is not None and c["score"] <= 5]
+            if mid_low:
+                summary.append("Do omówienia i rozwoju (≤ 5 pkt): " + ", ".join(mid_low) + ".")
+            no_notes = [c["name"] for c in detail if not c.get("notes")]
+            if no_notes:
+                summary.append("Bez notatek w dzienniku: " + ", ".join(no_notes) + " - poproś o przykłady.")
+            gaps = [r for r in ctx.get("self_rows") or [] if r.get("self_score") and r.get("manager_score")
+                    and abs(r["self_score"] - r["manager_score"]) >= 4]
+            if gaps:
+                summary.append("Największe rozbieżności z samooceną: " + ", ".join(
+                    f"{r['name']} ({r['manager_score']} vs {r['self_score']})" for r in gaps) + " - zacznij od nich.")
+            elif not ctx.get("self_rows"):
+                summary.append("Pracownik nie przekazał samooceny - zacznij rozmowę od jego perspektywy.")
+            if ctx.get("negative"):
+                summary.append("Ocena negatywna: przygotuj fakty z całego okresu i plan wsparcia w IPR.")
+        return ConversationPrepResult(summary=summary, goal=CONV_GOALS[kind], agenda=agenda, questions=questions,
+                                      communication_tips=_TIPS, difficult=difficult, wellbeing=wellbeing,
+                                      feedback=_feedback_items(ctx["criteria_detail"]) if assessment else [],
+                                      watch_out=watch)
 
     data, model = run_structured(prompt, ConversationPrepResult, heuristic, people)
+    # śledzalność: wskazówki mogą odwoływać się tylko do notatek przekazanych modelowi
+    for f in data.feedback:
+        f.source_note_ids = [i for i in f.source_note_ids if i in allowed_notes]
+        k = f.kind.lower().replace("ó", "o")
+        f.kind = "docenienie" if k.startswith("doc") else "rozwoj" if k.startswith("roz") else "dopytaj"
     return PipelineResult(data, model, version)
 
 

@@ -50,3 +50,46 @@ def test_employee_opening_prep(client, manager):
     assert client.post(f"/reviews/{rid}/ai/employee-opening-prep", headers=manager).status_code == 403
     kinds = {s["kind"] for s in client.get(f"/reviews/{rid}/ai-suggestions", headers=manager).json()}
     assert "employee_opening_prep" not in kinds
+
+
+def test_assessment_prep_gives_feedback_per_criterion(client, manager):
+    """Przed rozmową oceniającą: podsumowanie okresu i informacja zwrotna kryterium po kryterium."""
+    team = {e["full_name"]: e for e in client.get("/employees", headers=manager).json()}
+    rid = team["Piotr Nowak"]["current_review"]["id"]  # przygotowanie oceny (szkic)
+    r = client.post(f"/reviews/{rid}/ai/conversation-prep?kind=assessment", headers=manager)
+    assert r.status_code == 200, r.text
+    p = r.json()["payload"]
+    assert p["watch_out"] and p["feedback"] and p["summary"]
+    assert {f["kind"] for f in p["feedback"]} <= {"docenienie", "rozwoj", "dopytaj"}
+    evidence = {n["id"] for n in client.get(f"/reviews/{rid}/evidence", headers=manager).json()}
+    assert all(set(f["source_note_ids"]) <= evidence for f in p["feedback"])
+
+
+def test_self_assessment_window_is_stage_2_and_3(client, manager):
+    """Samoocena powstaje niezależnie od ocen przełożonego: etapy II-III; od etapu IV oceniany widzi już oceny."""
+
+    from sqlmodel import Session
+
+    from app.db import engine
+    from app.models import Review
+
+    team = {e["full_name"]: e for e in client.get("/employees", headers=manager).json()}
+    rid = team["Magdalena Kamińska"]["current_review"]["id"]  # okres oceny
+    magda = _login(client, "magdalena.kaminska@demo.gov.pl")
+    assert client.get(f"/reviews/{rid}/self-assessment", headers=magda).json()["open"] is True
+    with Session(engine) as s:
+        r = s.get(Review, rid)
+        old = r.status
+        r.status = "submitted"
+        s.add(r)
+        s.commit()
+    try:
+        assert client.get(f"/reviews/{rid}/self-assessment", headers=magda).json()["open"] is False
+        put = client.put(f"/reviews/{rid}/self-assessment", headers=magda, json={"items": {}, "summary": "x", "submit": False})
+        assert put.status_code == 409
+    finally:
+        with Session(engine) as s:
+            r = s.get(Review, rid)
+            r.status = old
+            s.add(r)
+            s.commit()

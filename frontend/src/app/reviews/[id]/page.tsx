@@ -213,7 +213,7 @@ function IprConclusions({ review, editable }: { review: Review; editable: boolea
   );
 }
 
-type Tab = "quality" | "evidence" | "compare" | "prep";
+type Tab = "quality" | "evidence";
 
 export default function ReviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -250,10 +250,7 @@ export default function ReviewPage() {
   });
   const cmp = useMutation({
     mutationFn: () => api<Suggestion<ComparePayload>>(`/reviews/${reviewId}/ai/compare-self`, { method: "POST" }),
-    onSuccess: (s) => {
-      setCompare(s);
-      setTab("compare");
-    },
+    onSuccess: setCompare,
   });
   const transition = useMutation({
     mutationFn: ({ action, json }: { action: string; json?: unknown }) => api<Review>(`/reviews/${reviewId}/${action}`, { method: "POST", json }),
@@ -355,14 +352,8 @@ export default function ReviewPage() {
           </aside>
         </div>
       ) : viewStep === "observation" ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <ObservationStage review={review} isReviewer={isReviewer} />
-          {isReviewer && viewingCurrent && (
-            <aside>
-              <ConversationPrep reviewId={review.id} kind="feedback" />
-            </aside>
-          )}
-        </div>
+        // etap II: okres oceny - dziennik obserwacji; notatki przełożonego wg metody FUKO (szablon w dzienniku)
+        <ObservationStage review={review} isReviewer={isReviewer} />
       ) : !isReviewer ? (
         <div className="space-y-6">
           <ReadOnlyReview review={review} />
@@ -522,15 +513,60 @@ export default function ReviewPage() {
           </div>
 
           {/* Panel asystenta */}
-          <aside className="lg:sticky lg:top-4 lg:self-start">
+          <aside className="space-y-4 lg:self-start">
+            {/* etap IV, przed rozmową oceniającą: podsumowanie AI i jak prowadzić rozmowę (kryteria ustalono na etapie I) */}
+            {viewingCurrent && review.status === "submitted" && <ConversationPrep reviewId={review.id} kind="assessment" />}
+            {/* etap III: przełożony widzi, czy samoocena przyszła; treść i porównanie na etapie IV (niezależna ocena) */}
+            {viewingCurrent && review.status === "draft" && (
+              <Card className="p-4 text-sm">
+                <div className="flex items-center gap-2 font-medium">
+                  <MessagesSquare className="h-4 w-4 text-primary" aria-hidden /> Samoocena pracownika
+                  {review.self_assessment_submitted ? (
+                    <Badge tone="green">przekazana {fmtDate(review.self_assessment_submitted_at)}</Badge>
+                  ) : (
+                    <Badge tone="amber">jeszcze nie przekazana</Badge>
+                  )}
+                </div>
+                <p className="mt-1.5 text-muted">
+                  {review.self_assessment_submitted
+                    ? "Porównanie z Twoją oceną i pytania do rozmowy zobaczysz po przekazaniu oceny do rozmowy oceniającej - dzięki temu obie oceny powstają niezależnie."
+                    : "Pracownik może przekazać samoocenę do czasu, gdy przekażesz ocenę do rozmowy oceniającej."}
+                </p>
+              </Card>
+            )}
+            {/* etap IV: porównanie z samooceną (samoocena powstaje na etapach II-III, niezależnie od oceny przełożonego) */}
+            {viewingCurrent && review.status === "submitted" && (
+              <Card>
+                <CardHeader
+                  title={
+                    <span className="inline-flex items-center gap-2">
+                      <MessagesSquare className="h-4 w-4 text-ai" aria-hidden /> Samoocena pracownika
+                    </span>
+                  }
+                  subtitle="Porównanie przed rozmową oceniającą"
+                />
+                <div className="space-y-3 p-4">
+                  {review.self_assessment_submitted ? (
+                    <>
+                      <Button variant="ai" className="w-full" onClick={() => cmp.mutate()} loading={cmp.isPending}>
+                        <PenLine className="h-4 w-4" aria-hidden /> Porównaj z samooceną i przygotuj pytania
+                      </Button>
+                      <AiWaiting active={cmp.isPending} />
+                      <ErrorBox error={cmp.error} />
+                      {compare && <ComparePanel suggestion={compare} />}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted">Pracownik nie przekazał samooceny przed przekazaniem oceny do rozmowy - zacznij rozmowę od jego perspektywy.</p>
+                  )}
+                </div>
+              </Card>
+            )}
             <Card>
               <div className="flex border-b border-border" role="tablist">
                 {(
                   [
                     ["quality", "Kontrola jakości", ShieldAlert],
                     ["evidence", "Dowody", NotebookText],
-                    ["compare", "Samoocena", MessagesSquare],
-                    ["prep", "Rozmowa", PenLine],
                   ] as const
                 ).map(([key, label, Icon]) => (
                   <button
@@ -567,23 +603,6 @@ export default function ReviewPage() {
                     <ul className="-mx-4 divide-y divide-border">
                       {evidence?.map((n) => <NoteItem key={n.id} note={n} highlighted={highlight === n.id} />)}
                     </ul>
-                  </div>
-                )}
-                {tab === "prep" && <ConversationPrep reviewId={review.id} kind="assessment" bare />}
-                {tab === "compare" && (
-                  <div className="space-y-3">
-                    {review.self_assessment_submitted ? (
-                      <>
-                        <Button variant="ai" className="w-full" onClick={() => cmp.mutate()} loading={cmp.isPending}>
-                          <PenLine className="h-4 w-4" aria-hidden /> Porównaj z samooceną i przygotuj pytania
-                        </Button>
-                        <AiWaiting active={cmp.isPending} />
-                        <ErrorBox error={cmp.error} />
-                        {compare && <ComparePanel suggestion={compare} />}
-                      </>
-                    ) : (
-                      <p className="text-sm text-muted">Pracownik nie przekazał jeszcze samooceny.</p>
-                    )}
                   </div>
                 )}
               </div>

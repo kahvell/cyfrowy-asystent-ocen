@@ -37,7 +37,7 @@ function SelfForm({ data, reviewId }: { data: SelfAssessment; reviewId: number }
     onSuccess: (r) => qc.setQueryData(["self", reviewId], r),
   });
 
-  const locked = !!data.submitted_at;
+  const locked = !!data.submitted_at || !data.open;
   const set = (cid: number, patch: Partial<{ score: number | null; comment: string }>) =>
     setItems((prev) => ({ ...prev, [cid]: { score: prev[cid]?.score ?? null, comment: prev[cid]?.comment ?? "", ...patch } }));
 
@@ -46,9 +46,11 @@ function SelfForm({ data, reviewId }: { data: SelfAssessment; reviewId: number }
       <PageTitle
         title="Samoocena"
         subtitle={
-          locked
+          data.submitted_at
             ? `Przekazana przełożonemu ${fmtDate(data.submitted_at)}. Będzie punktem wyjścia do rozmowy oceniającej.`
-            : "Twoja perspektywa przed rozmową oceniającą. Podaj przykłady - to one najlepiej pokazują Twoją pracę."
+            : !data.open
+              ? "Samoocenę można było przekazać do czasu przekazania oceny do rozmowy oceniającej. Swoją perspektywę przedstawisz w rozmowie."
+              : "Twoja perspektywa przed rozmową oceniającą - przekaż ją, zanim przełożony przekaże ocenę do rozmowy. Podaj przykłady: to one najlepiej pokazują Twoją pracę."
         }
       />
       <div className="space-y-4">

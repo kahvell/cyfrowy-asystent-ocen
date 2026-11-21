@@ -49,7 +49,7 @@ export default function MyPage() {
                   <Badge tone={statusTone(r.status)}>{STATUS_LABEL[r.status]}</Badge>
                 </div>
                 {r.overall_level && <p className="text-muted">Poziom: {r.overall_level}</p>}
-                {["observation", "draft", "submitted", "discussed"].includes(r.status) && (
+                {["observation", "draft"].includes(r.status) && (
                   <Link href={`/reviews/${r.id}/self`}>
                     <Button size="sm" variant="secondary">
                       <PenLine className="h-4 w-4" aria-hidden /> Samoocena
