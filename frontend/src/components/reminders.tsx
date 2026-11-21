@@ -29,8 +29,15 @@ function dueText(due: string) {
   return `termin: ${fmtDate(due)} · zostało ${d} dni`;
 }
 
-export function Reminders({ title = "Terminy i przypomnienia", limit = 8 }: { title?: string; limit?: number }) {
-  const { data } = useQuery({ queryKey: ["reminders"], queryFn: () => api<Reminder[]>("/reminders") });
+export function Reminders({ title = "Terminy i przypomnienia", limit = 8, scope = "all" }: {
+  title?: string;
+  limit?: number;
+  scope?: "self" | "team" | "all";
+}) {
+  const { data } = useQuery({
+    queryKey: ["reminders", scope],
+    queryFn: () => api<Reminder[]>(`/reminders?scope=${scope}`),
+  });
   if (!data || data.length === 0) return null;
   const urgent = data.filter((r) => r.severity !== "info").length;
   return (

@@ -26,3 +26,16 @@ Thumbs.db
 # lokalne ustawienia i sekrety poczty
 docker-compose.override.yml
 mailpit/
+
+# kopie zapasowe bazy (zawierają dane osobowe)
+backup/
+*.dump
+*.dump.meta.txt
+
+# materiały źródłowe (dokumentacja robocza poza repozytorium)
+1. Akty prawne/
+2. Przypadki użycia/
+3. Schemat procesu/
+4. Formularze ocen/
+5. Przykładowe wypełnione formularze oceny/
+6. Materiały dodatkowe/

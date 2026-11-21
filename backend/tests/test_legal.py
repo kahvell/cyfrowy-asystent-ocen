@@ -62,7 +62,8 @@ def test_position_change_within_6_months_reopens_criteria(client, hr, manager):
     zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
     e = client.post("/admin/employees", headers=hr, json={
         "full_name": "Nowy Przenoszony", "position": "Referent", "department_id": struct["departments"][0]["id"],
-        "manager_id": zielinski["id"], "employment_start": "2026-11-16"}).json()
+        "manager_id": zielinski["id"], "employment_start": "2026-11-16",
+        "email": "nowy.przenoszony@demo.gov.pl"}).json()
     cycle = next(c for c in client.get("/cycles", headers=manager).json() if c["status"] == "open")
     rv = client.post("/reviews", headers=manager, json={"employee_id": e["id"], "cycle_id": cycle["id"]}).json()
     due_before = rv["deadlines"]["due_date"]
@@ -98,7 +99,7 @@ def test_exit_review_on_request(client, hr):
     zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
     e = client.post("/admin/employees", headers=hr, json={
         "full_name": "Odchodzący Na Wniosek", "position": "Referent", "department_id": struct["departments"][0]["id"],
-        "manager_id": zielinski["id"]}).json()
+        "manager_id": zielinski["id"], "email": "odchodzacy.na.wniosek@demo.gov.pl"}).json()
     r = client.post(f"/admin/employees/{e['id']}/terminate", headers=hr,
                     json={"employment_end": "2026-12-31", "review_requested": True})
     assert r.status_code == 200 and r.json()["review_requested"] is True and r.json()["active"] is True
@@ -167,7 +168,8 @@ def test_fixed_term_contract_not_subject_to_periodic_review(client, hr, manager)
     zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
     e = client.post("/admin/employees", headers=hr, json={
         "full_name": "Na Czas Określony", "position": "Referent", "department_id": struct["departments"][0]["id"],
-        "manager_id": zielinski["id"], "contract_type": "okreslony"}).json()
+        "manager_id": zielinski["id"], "contract_type": "okreslony",
+        "email": "na.czas.okreslony@demo.gov.pl"}).json()
     cycle = next(c for c in client.get("/cycles", headers=manager).json() if c["status"] == "open")
     r = client.post("/reviews", headers=manager, json={"employee_id": e["id"], "cycle_id": cycle["id"]})
     assert r.status_code == 422 and "art. 81 ust. 1" in r.text
@@ -186,7 +188,8 @@ def test_late_review_period_end_is_due_date(client, hr, manager):
     zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
     e = client.post("/admin/employees", headers=hr, json={
         "full_name": "Piotr Spozniony", "position": "Specjalista", "department_id": struct["departments"][0]["id"],
-        "manager_id": zielinski["id"], "employment_start": "2019-01-02"}).json()
+        "manager_id": zielinski["id"], "employment_start": "2019-01-02",
+        "email": "piotr.spozniony@demo.gov.pl"}).json()
     rid = e["review_started"]
     due = client.get(f"/reviews/{rid}", headers=manager).json()["deadlines"]["due_date"]
     assert due < date.today().isoformat()  # ocena po terminie

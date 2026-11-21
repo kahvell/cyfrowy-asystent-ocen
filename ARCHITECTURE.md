@@ -273,6 +273,7 @@ POST   /reviews                                # utworzenie oceny w cyklu
 GET    /reviews/{id}
 PATCH  /reviews/{id}                           # zapis szkicu
 POST   /reviews/{id}/submit
+GET    /reviews/{id}/form.pdf                  # arkusz oceny A/B/C do pliku (reportlab)
 
 POST   /reviews/{id}/ai/draft?criterion_id=    → SSE stream uzasadnienia
 POST   /reviews/{id}/ai/quality-check
@@ -351,7 +352,7 @@ stateDiagram-v2
 
 Przebieg odwzorowuje schemat procesu KPRM (BPMN, tory: zarządzający, oceniający, oceniany, admin, scheduler): start cyklu po wprowadzeniu pracownika i po każdej sporządzonej ocenie (`services/cycle.py`), powiadomienia stron na każdym kroku, zmiana oceny po sprzeciwie wprowadzana przez dyrektora generalnego.
 
-Terminy liczy `services/deadlines.py` (miesiące z końcem miesiąca, dni od zdarzenia, przesunięcie na dzień roboczy z polskimi świętami, łączenie nieobecności). Przypomnienia (`/reminders`) to „scheduler” z przypadków użycia - liczony przy odczycie, gotowy do podpięcia pod cron i e-mail.
+Terminy liczy `services/deadlines.py` (miesiące z końcem miesiąca, dni od zdarzenia, przesunięcie na dzień roboczy z polskimi świętami, łączenie nieobecności). Przypomnienia (`/reminders?scope=self|team|all`) to „scheduler” z przypadków użycia - liczony przy odczycie, gotowy do podpięcia pod cron i e-mail. `scope=self` (sprawy własne ocenianego) zasila widok `/me`, `scope=team` (zadania o zespole i sprawy kadrowe) - `/team` i dashboard.
 
 ## 9. Frontend — ekrany
 
@@ -401,7 +402,7 @@ SEED_DEMO_DATA=true
 
 Start backendu: `create_all` → seed (kryteria, przepisy do RAG, dane demo; brakujące embeddingi są uzupełniane) → `uvicorn`.
 
-Konta demo (w README): `kierownik@demo.gov.pl`, `pracownik@demo.gov.pl`, `hr@demo.gov.pl`.
+Konta demo (w README): każdy pracownik ma konto `imie.nazwisko@demo.gov.pl` (np. `marek.zielinski@demo.gov.pl`, `anna.kowalska@demo.gov.pl`), a dodatkowo `hr@demo.gov.pl` i `admin@demo.gov.pl`.
 
 ---
 
@@ -448,8 +449,10 @@ Zaimplementowane etapy 0–7 z sekcji 13. Odstępstwa od pierwotnego planu (uzas
 | — | `/analytics/overview`, analiza średnich K/M | jeden request dla dashboardu; wykrywanie stronniczości |
 | cykl draft→final | pełny proces z części I-III arkusza, zapoznaniem, fikcją zapoznania i sprzeciwem | dokumenty KPRM: przypadki użycia, schemat pól formularza (ADR 0004) |
 | — | wirtualny HR partner: `analytics/wellbeing.py` (jawne reguły) + `conversation_prep` (LLM) | wymaganie modułu HR partnera z opisu wyzwania |
-| — | wydruk arkusza `/reviews/{id}/print` wg wzoru, zaproszenia `.ics` | „wydruk zgodny z wzorem”, integracja z pocztą |
+| — | wydruk arkusza `/reviews/{id}/print` wg wzoru, serwerowy PDF `/reviews/{id}/form.pdf` (reportlab, wzory zał. 2-4), zaproszenia `.ics` | „wydruk zgodny z wzorem”, integracja z pocztą |
 | — | HR widzi sporządzone arkusze (final/acknowledged/objection), bez szkiców i notatek | komórka kadrowa prowadzi dokumentację i obsługuje sprzeciwy |
 | — | panel Kadry (`/admin/*`): pracownicy, podległość = zmiana oceniającego, nieobecności przeliczające termin, ustanie zatrudnienia | przypadki użycia „ogólne” z materiałów KPRM |
 | — | powiadomienia w systemie + SMTP, `python -m app.services.notify digest` z crona | „przypominać o terminach”, integracja z pocztą |
 | — | wniosek ocenianego o zmianę terminu, tryb korekty administratora (`correction_reason`) | przypadki użycia KPRM |
+| — | klikalny pasek etapów oceny: etapy przeszłe do wglądu (tylko odczyt), bieżący edytowalny, przyszłe zablokowane; pola etapu „Rozmowa oceniająca” (status `submitted`) odblokowuje zaproszenie `.ics` (`assessment_invited_at`) | schemat procesu KPRM: przełożony musi móc wrócić do wcześniejszych etapów, a rozmowę oceniającą trzeba najpierw umówić |
+| instalator natywny dla Windows | kontenery OCI + `start.ps1` + `scripts/backup-postgres.ps1`; zmiany kryteriów migracją danych, nie seedem | licencja Dockera rozwiązywana Podmanem, a seed wypełnia tylko puste tabele (ADR 0005) |

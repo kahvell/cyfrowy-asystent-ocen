@@ -40,25 +40,56 @@ const STEPS: { key: Review["status"]; label: string }[] = [
   { key: "acknowledged", label: "Zakończona" },
 ];
 
-export function ProcessStepper({ review }: { review: Review }) {
+/** Nazwa etapu (statusy „objection” pokazujemy jako etap „Zapoznanie”). */
+export function stepLabel(key: Review["status"]): string {
+  const k = key === "objection" ? "final" : key;
+  return STEPS.find((s) => s.key === k)?.label ?? k;
+}
+
+export function ProcessStepper({
+  review,
+  selected,
+  onSelect,
+}: {
+  review: Review;
+  selected?: Review["status"];
+  onSelect?: (key: Review["status"]) => void;
+}) {
   const status = review.status === "objection" ? "final" : review.status;
   const idx = STEPS.findIndex((s) => s.key === status);
+  const sel = selected ?? status;
   return (
     <nav aria-label="Etapy oceny okresowej" className="mb-4">
       <ol className="flex flex-wrap gap-1.5 text-xs">
-        {STEPS.map((s, i) => (
-          <li
-            key={s.key}
-            aria-current={i === idx ? "step" : undefined}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1",
-              i < idx || review.status === "acknowledged" ? "bg-emerald-50 text-emerald-800" : i === idx ? "bg-primary text-white" : "bg-slate-100 text-slate-500",
-            )}
-          >
-            {(i < idx || (review.status === "acknowledged" && i === idx)) && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
-            {i + 1}. {s.label}
-          </li>
-        ))}
+        {STEPS.map((s, i) => {
+          const done = i < idx || review.status === "acknowledged";
+          const isCurrent = i === idx;
+          // przeszłe i bieżący etap są osiągalne (podgląd / edycja); przyszłe - zablokowane
+          const reached = i <= idx || review.status === "acknowledged";
+          const isSelected = s.key === sel;
+          return (
+            <li key={s.key}>
+              <button
+                type="button"
+                disabled={!reached || !onSelect}
+                aria-current={isCurrent ? "step" : undefined}
+                aria-pressed={isSelected}
+                title={reached ? "Pokaż ten etap" : "Etap jeszcze nieosiągnięty"}
+                onClick={() => onSelect?.(s.key)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-3 py-1 transition-shadow",
+                  done ? "bg-emerald-50 text-emerald-800" : isCurrent ? "bg-primary text-white" : "bg-slate-100 text-slate-500",
+                  reached && onSelect && "hover:ring-2 hover:ring-primary/40",
+                  isSelected && "ring-2 ring-primary ring-offset-1",
+                  !reached && "cursor-not-allowed opacity-60",
+                )}
+              >
+                {(done || (review.status === "acknowledged" && isCurrent)) && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />}
+                {i + 1}. {s.label}
+              </button>
+            </li>
+          );
+        })}
         {review.status === "objection" && (
           <li className="flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-red-800">
             <Gavel className="h-3.5 w-3.5" aria-hidden /> sprzeciw w toku
@@ -661,6 +692,7 @@ export function DeliveryPanel({ review, isReviewer, isEmployee, isHr }: { review
 // ------------------------------------------------------------------ integracja: zaproszenie do kalendarza
 
 export function InviteButton({ reviewId, kind, label }: { reviewId: number; kind: "opening" | "assessment" | "feedback"; label: string }) {
+  const qc = useQueryClient();
   const [when, setWhen] = useState(() => {
     const d = new Date(Date.now() + 2 * 86400000);
     return `${d.toISOString().slice(0, 10)}T10:00`;
@@ -678,6 +710,8 @@ export function InviteButton({ reviewId, kind, label }: { reviewId: number; kind
     a.download = `rozmowa-${kind}.ics`;
     a.click();
     URL.revokeObjectURL(url);
+    // zaproszenie na rozmowę oceniającą odblokowuje pola tego etapu - odśwież arkusz
+    qc.invalidateQueries({ queryKey: ["review", reviewId] });
   };
   return (
     <div className="flex flex-wrap items-center gap-2">

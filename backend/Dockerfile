@@ -4,6 +4,10 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 
+# czcionka DejaVu - polskie znaki w generowanym arkuszu PDF (reportlab)
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # zależności w osobnej warstwie - zmiana kodu nie pobiera ich ponownie;
 # cache pip między buildami - dodanie jednej biblioteki nie pobiera wszystkich od nowa
 COPY pyproject.toml ./

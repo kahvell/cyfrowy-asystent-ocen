@@ -5,6 +5,7 @@ Ten sam moduł można wywołać z crona i wysyłać e-maile (integracja opisana 
 """
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
@@ -28,12 +29,16 @@ def _item(kind: str, title: str, detail: str, due: date | None, link: str, today
             "severity": severity, "link": link}
 
 
-def reminders_for(session: Session, user: User, today: date | None = None) -> list[dict]:
+def reminders_for(session: Session, user: User, today: date | None = None, scope: str = "all") -> list[dict]:
+    """`scope`: „self” - tylko sprawy samego użytkownika jako ocenianego (widok /me),
+    „team” - zadania o zespole / sprawy kadrowe (widok /team, dashboard), „all” - jedno i drugie."""
     today = today or date.today()
     out: list[dict] = []
     soon = dl.RULES["reminder_days"]
+    with_team = scope in ("all", "team")
+    with_self = scope in ("all", "self")
 
-    if user.role in ("manager", "admin"):
+    if with_team and user.role in ("manager", "admin"):
         team_ids = direct_report_ids(session, user) if user.role == "manager" else None
         q = select(Review, Employee).join(Employee, Employee.id == Review.employee_id)
         if team_ids is not None:
@@ -88,7 +93,7 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
                                      "Rozpocznij cykl oceny: wybór arkusza i kryteriów.", None,
                                      f"/employees/{e.id}", today, "info"))
 
-    if user.employee_id:
+    if with_self and user.employee_id:
         for r in session.exec(select(Review).where(Review.employee_id == user.employee_id)).all():
             link = f"/reviews/{r.id}"
             if r.status == "criteria" and r.criteria_reviewer_confirmed_at:
@@ -111,7 +116,7 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
                     out.append(_item("objection_window", "Termin na sprzeciw od oceny",
                                      "Sprzeciw do dyrektora generalnego urzędu (art. 83 ust. 1).", od, link, today, "info"))
 
-    if user.role in ("hr", "admin"):
+    if with_team and user.role in ("hr", "admin"):
         for r, e in session.exec(select(Review, Employee).join(Employee, Employee.id == Review.employee_id)
                                  .where(Review.status.in_(["objection", "acknowledged"]))).all():
             link = f"/reviews/{r.id}"
@@ -129,7 +134,7 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
                                  "Dwie kolejne oceny na jednym z dwóch najwyższych poziomów (art. 89 ust. 2).",
                                  dl.promotion_deadline(r.acknowledged_at), link, today))
 
-    if user.role in ("hr", "admin"):
+    if with_team and user.role in ("hr", "admin"):
         for ipr, e in session.exec(select(IPR, Employee).join(Employee, Employee.id == IPR.employee_id)
                                    .where(IPR.status == "accepted")).all():
             out.append(_item("ipr_approval", f"IPR do zatwierdzenia: {e.full_name}",
@@ -141,5 +146,6 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
 
 
 @router.get("/reminders")
-def get_reminders(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    return reminders_for(session, user)
+def get_reminders(scope: Literal["self", "team", "all"] = "all", user: User = Depends(get_current_user),
+                  session: Session = Depends(get_session)):
+    return reminders_for(session, user, scope=scope)

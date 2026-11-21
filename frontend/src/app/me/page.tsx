@@ -26,7 +26,7 @@ export default function MyPage() {
   return (
     <>
       <PageTitle title={`Dzień dobry, ${emp.full_name.split(" ")[0]}`} subtitle={`${emp.position} · przełożony: ${emp.manager_name ?? "-"}`} />
-      <Reminders title="Do zrobienia" />
+      <Reminders title="Do zrobienia" scope="self" />
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <Card className="p-5">

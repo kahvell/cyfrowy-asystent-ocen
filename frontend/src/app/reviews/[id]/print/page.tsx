@@ -1,12 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Printer } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { Button, ErrorBox, Spinner } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, downloadFile } from "@/lib/api";
 import type { Review } from "@/lib/types";
 import FOOTNOTES from "@/lib/form-footnotes.json";
 import { fmtDate, SCALE } from "@/lib/utils";
@@ -132,8 +133,22 @@ function People({ title, p, sheet, positionFn }: { title: string; p: Review["emp
 export default function PrintReview() {
   const { id } = useParams<{ id: string }>();
   const { data: r, error, isPending } = useQuery({ queryKey: ["review", Number(id)], queryFn: () => api<Review>(`/reviews/${id}`) });
+  const [busy, setBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox error={error} />;
+
+  async function downloadPdf() {
+    setBusy(true);
+    setPdfError(null);
+    try {
+      await downloadFile(`/reviews/${id}/form.pdf`, `arkusz-oceny-${r?.sheet_type ?? id}.pdf`);
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : "Nie udało się pobrać arkusza PDF");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const mandatory = r.criteria.filter((c) => !c.is_additional);
   const additional = r.criteria.filter((c) => c.is_additional);
@@ -147,12 +162,18 @@ export default function PrintReview() {
           ← wróć do arkusza
         </Link>
         <div className="flex items-center gap-2 text-xs text-muted">
-          W oknie drukowania wybierz „Zapisz jako PDF”, aby wyeksportować arkusz do pliku.
+          <span className="hidden sm:inline">W oknie drukowania wybierz „Zapisz jako PDF”, aby wyeksportować arkusz do pliku.</span>
+          <Button onClick={downloadPdf} disabled={busy} loading={busy}>
+            <Download className="h-4 w-4" aria-hidden /> Pobierz PDF
+          </Button>
           <Button onClick={() => window.print()}>
             <Printer className="h-4 w-4" aria-hidden /> Drukuj / PDF
           </Button>
         </div>
       </div>
+      {pdfError && (
+        <p className="mb-2 text-sm text-red-600 print:hidden">{pdfError}</p>
+      )}
 
       <div className="space-y-4 border border-slate-300 p-[12mm] print:border-0 print:p-0">
         <div className="text-right text-[11px]">

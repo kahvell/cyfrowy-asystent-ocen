@@ -1,8 +1,25 @@
 """Fikcyjny urząd do demo. Wszystkie osoby i zdarzenia są zmyślone."""
 
+import unicodedata
 from datetime import date
 
 DEMO_PASSWORD = "demo123"
+DEMO_EMAIL_DOMAIN = "demo.gov.pl"
+
+# „ł/Ł” nie mają rozkładu NFKD (w odróżnieniu od ą, ć, ę, ń, ó, ś, ź, ż) - transliterujemy je ręcznie
+_PL_DIACRITICS = str.maketrans({"ł": "l", "Ł": "L"})
+
+
+def email_for(full_name: str) -> str:
+    """Służbowy adres demo w formacie imie.nazwisko@demo.gov.pl (polskie znaki transliterowane).
+
+    Przykłady: „Tomasz Wójcik” -> tomasz.wojcik@demo.gov.pl, „Łukasz Michalski” -> lukasz.michalski@demo.gov.pl.
+    W urzędzie format adresu bywa inny - dlatego w zakładce Kadry e-mail można edytować ręcznie.
+    """
+    ascii_name = unicodedata.normalize("NFKD", full_name.translate(_PL_DIACRITICS)).encode("ascii", "ignore").decode()
+    local = ".".join(part for part in ascii_name.lower().split() if part)
+    return f"{local}@{DEMO_EMAIL_DOMAIN}"
+
 
 OFFICE = "Urząd Wojewódzki w Przykładowie (dane fikcyjne)"
 
@@ -15,7 +32,7 @@ DEPARTMENTS = [
     {
         "name": "Wydział Cyfryzacji",
         "head": ("Marek Zieliński", "M", "Naczelnik Wydziału Cyfryzacji"),
-        "email": "kierownik@demo.gov.pl",
+        "email": email_for("Marek Zieliński"),
         "bias": 0.0,
         "staff": [
             ("Anna Kowalska", "K", "Starszy specjalista ds. systemów informatycznych", True,
@@ -36,7 +53,7 @@ DEPARTMENTS = [
     {
         "name": "Wydział Obsługi Klienta",
         "head": ("Ewa Dąbrowska", "K", "Naczelnik Wydziału Obsługi Klienta"),
-        "email": "kierownik.obsluga@demo.gov.pl",
+        "email": email_for("Ewa Dąbrowska"),
         "bias": 2.2,  # oceniający „łagodny” - prawie wszyscy dostają 9
         "staff": [
             ("Joanna Szymańska", "K", "Inspektor ds. obsługi klienta", False, "Obsługa interesantów w punkcie kancelaryjnym."),
@@ -50,7 +67,7 @@ DEPARTMENTS = [
     {
         "name": "Wydział Finansów i Budżetu",
         "head": ("Andrzej Krawczyk", "M", "Naczelnik Wydziału Finansów i Budżetu"),
-        "email": "kierownik.finanse@demo.gov.pl",
+        "email": email_for("Andrzej Krawczyk"),
         "bias": -1.4,  # oceniający „surowy”
         "staff": [
             ("Barbara Piotrowska", "K", "Główny księgowy - specjalista", True, "Prowadzenie ksiąg rachunkowych."),
@@ -64,7 +81,7 @@ DEPARTMENTS = [
     {
         "name": "Wydział Kadr i Szkoleń",
         "head": ("Dorota Wieczorek", "K", "Naczelnik Wydziału Kadr i Szkoleń"),
-        "email": "kierownik.kadry@demo.gov.pl",
+        "email": email_for("Dorota Wieczorek"),
         "bias": 0.3,
         "staff": [
             ("Marta Jabłońska", "K", "Starszy specjalista ds. kadr", True, "Prowadzenie akt osobowych."),
@@ -76,9 +93,14 @@ DEPARTMENTS = [
     },
 ]
 
-EMPLOYEE_LOGIN = ("pracownik@demo.gov.pl", "Anna Kowalska")
+EMPLOYEE_LOGIN = (email_for("Anna Kowalska"), "Anna Kowalska")
 HR_USER = ("hr@demo.gov.pl", "Iwona Malinowska (HR)")
 ADMIN_USER = ("admin@demo.gov.pl", "Administrator systemu")
+
+# dyrektor generalny - bezpośredni przełożony naczelników wydziałów (art. 81 ust. 1 ustawy)
+DIRECTOR_DEPT = "Dyrekcja"
+DIRECTOR = ("Wacław Zawadzki", "M", "Dyrektor Generalny")
+DIRECTOR_LOGIN = (email_for(DIRECTOR[0]), DIRECTOR[0])
 
 # (data, tekst, kody kryteriów, sentyment, źródło)
 NOTES: dict[str, list[tuple[date, str, list[str], str, str]]] = {

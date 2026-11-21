@@ -101,7 +101,9 @@ class EmployeeIn(BaseModel):
     civil_grade_date: date | None = None
     position_description: str = ""
     senior_position: bool = False  # wyższe stanowisko w służbie cywilnej (art. 52) - bez IPR
-    email: str | None = None  # utworzenie konta w systemie
+    # konto w systemie powstaje razem z pracownikiem; format adresu bywa różny w różnych urzędach,
+    # dlatego kadry wpisują go ręcznie (domyślnie imie.nazwisko@demo.gov.pl)
+    email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class EmployeePatch(BaseModel):
@@ -118,6 +120,7 @@ class EmployeePatch(BaseModel):
     civil_grade_date: date | None = None
     position_description: str | None = None
     senior_position: bool | None = None
+    email: str | None = Field(default=None, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # zmiana adresu konta
     reason: str = ""  # np. „zmiana struktury”, „powierzenie innego stanowiska”
     # zmiana stanowiska wiążąca się z istotną zmianą zakresu obowiązków (art. 81 ust. 6, § 9 rozporządzenia)
     significant_change_date: date | None = None
@@ -127,17 +130,15 @@ class EmployeePatch(BaseModel):
 def create_employee(body: EmployeeIn, user: User = Depends(hr_only), session: Session = Depends(get_session)):
     if session.get(Department, body.department_id) is None:
         raise HTTPException(422, "Nieznana komórka organizacyjna")
-    data = body.model_dump(exclude={"email"})
-    e = Employee(**data)
+    if session.exec(select(User).where(User.email == body.email)).first():
+        raise HTTPException(409, "Konto z tym adresem już istnieje")
+    e = Employee(**body.model_dump(exclude={"email"}))
     session.add(e)
     session.flush()
-    password = None
-    if body.email:
-        if session.exec(select(User).where(User.email == body.email)).first():
-            raise HTTPException(409, "Konto z tym adresem już istnieje")
-        password = secrets.token_urlsafe(9)
-        session.add(User(email=body.email, full_name=e.full_name, password_hash=hash_password(password),
-                         role="manager" if e.sheet_type in ("A", "B") else "employee", employee_id=e.id))
+    # każdy pracownik ma konto - hasło startowe przekazywane bezpiecznym kanałem, do zmiany po pierwszym logowaniu
+    password = secrets.token_urlsafe(9)
+    session.add(User(email=body.email, full_name=e.full_name, password_hash=hash_password(password),
+                     role="manager" if e.sheet_type in ("A", "B") else "employee", employee_id=e.id))
     audit(session, user, "create", "employee", e.id)
     session.flush()
     started = start_for_new_employee(session, e)  # schemat procesu: dane pracownika -> początek cyklu oceny
@@ -171,13 +172,30 @@ def update_employee(employee_id: int, body: EmployeePatch, user: User = Depends(
     e = session.get(Employee, employee_id)
     if e is None:
         raise HTTPException(404, "Nie ma takiego pracownika")
-    changes = body.model_dump(exclude_unset=True, exclude={"reason", "significant_change_date"})
+    changes = body.model_dump(exclude_unset=True, exclude={"reason", "significant_change_date", "email"})
     if changes.get("manager_id") == e.id:
         raise HTTPException(422, "Pracownik nie może być swoim przełożonym")
     old_manager = e.manager_id
     for k, v in changes.items():
         setattr(e, k, v)
     session.add(e)
+
+    # zmiana adresu konta (format zależy od urzędu); pracownik bez konta dostaje je przy okazji edycji
+    account = session.exec(select(User).where(User.employee_id == e.id)).first()
+    new_password = None
+    email_changed = False
+    if "email" in body.model_fields_set and body.email and body.email != (account.email if account else None):
+        if account is None:
+            new_password = secrets.token_urlsafe(9)
+            session.add(User(email=body.email, full_name=e.full_name, password_hash=hash_password(new_password),
+                             role="manager" if e.sheet_type in ("A", "B") else "employee", employee_id=e.id))
+        else:
+            if session.exec(select(User).where(User.email == body.email)).first():
+                raise HTTPException(409, "Konto z tym adresem już istnieje")
+            account.email = body.email
+            session.add(account)
+        email_changed = True
+
     moved = []
     # zmiana podległości = zmiana oceniającego w trwających ocenach (art. 81 ust. 8 pkt 1)
     if "manager_id" in changes and changes["manager_id"] != old_manager:
@@ -208,12 +226,13 @@ def update_employee(employee_id: int, body: EmployeePatch, user: User = Depends(
                        "razie przekaż nowemu przełożonemu opinię i notatki z obserwacji.", f"/reviews/{r.id}")
             notify_employee(session, r, "Zmiana oceniającego", f"Twoim oceniającym jest teraz {new_reviewer.full_name}.")
     position_effects = position_change(session, e, body.significant_change_date) if body.significant_change_date else []
-    audit(session, user, "update", "employee", e.id, fields=sorted(changes), reason=body.reason, reviews_moved=moved,
-          position_change=position_effects)
+    audit(session, user, "update", "employee", e.id, fields=sorted([*changes, *(["email"] if email_changed else [])]),
+          reason=body.reason, reviews_moved=moved, position_change=position_effects)
     session.commit()
     depts = {d.id: d for d in session.exec(select(Department)).all()}
     people = {x.id: x for x in session.exec(select(Employee)).all()}
-    return {**_emp_out(session, e, depts, people), "reviews_moved": moved, "position_change": position_effects}
+    return {**_emp_out(session, e, depts, people), "reviews_moved": moved, "position_change": position_effects,
+            "initial_password": new_password}
 
 
 def position_change(session: Session, e: Employee, changed: date) -> list[dict]:

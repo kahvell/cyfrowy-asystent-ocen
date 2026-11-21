@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { ComparePanel, DraftSuggestion, SourceChip, WarningsList } from "@/components/ai-panels";
 import { ConversationPrep } from "@/components/hr-partner";
-import { AdminCorrection, CriteriaStage, DeadlinesBar, DeliveryPanel, DueDateRequests, InviteButton, ObservationStage, ProcessStepper, SheetData } from "@/components/process";
+import { AdminCorrection, CriteriaStage, DeadlinesBar, DeliveryPanel, DueDateRequests, InviteButton, ObservationStage, ProcessStepper, SheetData, stepLabel } from "@/components/process";
 import { useMe } from "@/components/app-shell";
 import { NoteItem } from "@/components/notes";
 import { AiWaiting, Badge, Button, Card, CardHeader, ErrorBox, FieldLegend, fieldTone, Input, PageTitle, Req, Spinner, Textarea } from "@/components/ui";
@@ -225,6 +225,9 @@ export default function ReviewPage() {
   const [warnings, setWarnings] = useState<Warning[] | null>(null);
   const [compare, setCompare] = useState<Suggestion<ComparePayload> | null>(null);
   const [convDate, setConvDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // etap wybrany kliknięciem w pasku etapów; honorowany tylko dla bieżącego statusu arkusza
+  // (po przejściu do kolejnego etapu widok sam wraca do etapu bieżącego - bez efektu)
+  const [picked, setPicked] = useState<{ reviewId: number; status: Review["status"]; step: Review["status"] } | null>(null);
   const cardRefs = useRef(new Map<number, HTMLDivElement>());
 
   const { data: review, error, isPending } = useQuery({ queryKey: ["review", reviewId], queryFn: () => api<Review>(`/reviews/${reviewId}`) });
@@ -275,7 +278,13 @@ export default function ReviewPage() {
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox error={error} />;
 
-  const editable = isReviewer && (review.status === "draft" || review.status === "discussed");
+  // etap bieżący wyznacza status procesu; kliknięcie w pasku etapów otwiera etap przeszły do wglądu
+  const currentStep: Review["status"] = review.status === "objection" ? "final" : review.status;
+  const pickedStep = picked && picked.reviewId === reviewId && picked.status === review.status ? picked.step : null;
+  const viewStep: Review["status"] = pickedStep ?? currentStep;
+  const viewingCurrent = viewStep === currentStep;
+  // edytować można wyłącznie etap bieżący - etapy przeszłe (potwierdzone przez ocenianego) tylko do wglądu
+  const editable = isReviewer && viewingCurrent && (review.status === "draft" || review.status === "discussed");
   const showNote = (nid: number) => {
     setTab("evidence");
     setHighlight(nid);
@@ -300,22 +309,37 @@ export default function ReviewPage() {
           )
         }
       />
-      <ProcessStepper review={review} />
+      <ProcessStepper
+        review={review}
+        selected={viewStep}
+        onSelect={isReviewer ? (key) => setPicked({ reviewId, status: review.status, step: key }) : undefined}
+      />
       <DeadlinesBar review={review} />
       <AdminCorrection key={review.updated_at} review={review} isAdmin={me?.role === "admin"} />
 
-      {review.status === "criteria" ? (
+      {!viewingCurrent && (
+        <Card className="mb-6 px-5 py-3 text-sm">
+          <span className="text-slate-700">
+            Podglądasz zakończony etap <strong>{stepLabel(viewStep)}</strong> - edycja i zmiana statusu są możliwe tylko na etapie bieżącym.
+          </span>{" "}
+          <button type="button" className="text-primary hover:underline" onClick={() => setPicked(null)}>
+            Wróć do bieżącego etapu ({stepLabel(currentStep)})
+          </button>
+        </Card>
+      )}
+
+      {viewStep === "criteria" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <CriteriaStage review={review} isReviewer={isReviewer} isEmployee={isEmployee} onWarnings={setWarnings} />
+          <CriteriaStage review={review} isReviewer={isReviewer && viewingCurrent} isEmployee={isEmployee && viewingCurrent} onWarnings={setWarnings} />
           <aside className="space-y-4">
             {warnings && <WarningsList warnings={warnings} review={review} onShowNote={() => {}} onJump={() => {}} />}
-            {isReviewer && <ConversationPrep reviewId={review.id} kind="opening" />}
+            {isReviewer && viewingCurrent && <ConversationPrep reviewId={review.id} kind="opening" />}
           </aside>
         </div>
-      ) : review.status === "observation" ? (
+      ) : viewStep === "observation" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <ObservationStage review={review} isReviewer={isReviewer} />
-          {isReviewer && (
+          <ObservationStage review={review} isReviewer={isReviewer && viewingCurrent} />
+          {isReviewer && viewingCurrent && (
             <aside>
               <ConversationPrep reviewId={review.id} kind="feedback" />
             </aside>
@@ -405,43 +429,55 @@ export default function ReviewPage() {
               <DeliveryPanel review={review} isReviewer={isReviewer} isEmployee={false} isHr={isHr} />
             )}
 
-            <Card className="p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                {review.status === "draft" && (
-                  <Button onClick={() => transition.mutate({ action: "submit" })} loading={transition.isPending}>
-                    <ClipboardCheck className="h-4 w-4" aria-hidden /> Przekaż do rozmowy oceniającej
-                  </Button>
-                )}
-                {review.status === "submitted" && (
-                  <>
-                    <div className="w-full">
-                      <InviteButton reviewId={review.id} kind="assessment" label="Zaproś na rozmowę oceniającą" />
-                    </div>
-                    <Input type="date" value={convDate} onChange={(e) => setConvDate(e.target.value)} className="w-auto" aria-label="Data rozmowy" />
-                    <Button onClick={() => transition.mutate({ action: "discussed", json: { conversation_date: convDate } })} loading={transition.isPending}>
-                      <MessagesSquare className="h-4 w-4" aria-hidden /> Rozmowa przeprowadzona
+            {viewingCurrent ? (
+              <Card className="p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  {review.status === "draft" && (
+                    <Button onClick={() => transition.mutate({ action: "submit" })} loading={transition.isPending}>
+                      <ClipboardCheck className="h-4 w-4" aria-hidden /> Przekaż do rozmowy oceniającej
                     </Button>
-                    <Button variant="ghost" onClick={() => transition.mutate({ action: "reopen" })}>
-                      Wróć do szkicu
+                  )}
+                  {review.status === "submitted" && (
+                    <>
+                      {review.assessment_invited_at ? (
+                        <>
+                          <Input type="date" value={convDate} onChange={(e) => setConvDate(e.target.value)} className="w-auto" aria-label="Data rozmowy" />
+                          <Button onClick={() => transition.mutate({ action: "discussed", json: { conversation_date: convDate } })} loading={transition.isPending}>
+                            <MessagesSquare className="h-4 w-4" aria-hidden /> Rozmowa przeprowadzona
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="w-full space-y-2">
+                          <p className="text-sm text-amber-800">
+                            Umów rozmowę oceniającą - wyślij zaproszenie (.ics), żeby odblokować ustawienie daty rozmowy i potwierdzenie jej odbycia.
+                          </p>
+                          <InviteButton reviewId={review.id} kind="assessment" label="Zaproś na rozmowę oceniającą" />
+                        </div>
+                      )}
+                      <Button variant="ghost" onClick={() => transition.mutate({ action: "reopen" })}>
+                        Wróć do szkicu
+                      </Button>
+                    </>
+                  )}
+                  {review.status === "discussed" && (
+                    <Button onClick={() => transition.mutate({ action: "finalize", json: { place: review.reviewer_place || review.office.city } })} loading={transition.isPending}>
+                      <CheckCircle2 className="h-4 w-4" aria-hidden /> Sporządź ocenę na piśmie i przekaż ocenianemu
                     </Button>
-                  </>
-                )}
-                {review.status === "discussed" && (
-                  <Button onClick={() => transition.mutate({ action: "finalize", json: { place: review.reviewer_place || review.office.city } })} loading={transition.isPending}>
-                    <CheckCircle2 className="h-4 w-4" aria-hidden /> Sporządź ocenę na piśmie i przekaż ocenianemu
-                  </Button>
-                )}
-                {review.status === "final" && <p className="text-sm text-amber-800">Ocena przekazana ocenianemu - czeka na potwierdzenie zapoznania.</p>}
-                {review.status === "acknowledged" && (
-                  <p className="text-sm text-emerald-800">
-                    Proces zakończony. Oceniany zapoznał się z oceną {fmtDate(review.acknowledged_at)}
-                    {review.deadlines.objection_open ? ` - sprzeciw możliwy do ${fmtDate(review.deadlines.objection_deadline)}.` : "."}
-                  </p>
-                )}
-                {review.status === "objection" && <p className="text-sm text-red-800">Sprzeciw rozpatruje {review.office.objection_body} (14 dni, art. 83 ust. 3).</p>}
-              </div>
-              <ErrorBox error={transition.error} />
-            </Card>
+                  )}
+                  {review.status === "final" && <p className="text-sm text-amber-800">Ocena przekazana ocenianemu - czeka na potwierdzenie zapoznania.</p>}
+                  {review.status === "acknowledged" && (
+                    <p className="text-sm text-emerald-800">
+                      Proces zakończony. Oceniany zapoznał się z oceną {fmtDate(review.acknowledged_at)}
+                      {review.deadlines.objection_open ? ` - sprzeciw możliwy do ${fmtDate(review.deadlines.objection_deadline)}.` : "."}
+                    </p>
+                  )}
+                  {review.status === "objection" && <p className="text-sm text-red-800">Sprzeciw rozpatruje {review.office.objection_body} (14 dni, art. 83 ust. 3).</p>}
+                </div>
+                <ErrorBox error={transition.error} />
+              </Card>
+            ) : (
+              <Card className="p-5 text-sm text-muted">Akcje etapu wykonasz w widoku bieżącego etapu ({stepLabel(currentStep)}).</Card>
+            )}
           </div>
 
           {/* Panel asystenta */}

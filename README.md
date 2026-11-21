@@ -58,6 +58,8 @@ docker compose up --build        # backend + frontend + Postgres
 
 Frontend: http://localhost:3000 · API i dokumentacja OpenAPI: http://localhost:8000/docs · testowa skrzynka e-mail (Mailpit): http://localhost:8025
 
+**Windows 11:** zamiast powyższych komend uruchom `.\start.ps1` (sprawdza Dockera, tworzy `.env`, podnosi stos, czeka na `/health` i otwiera przeglądarkę). Wymaga Docker Desktop albo — ze względu na licencję w administracji publicznej — Podman Desktop / Rancher Desktop.
+
 Bez modelu system działa na regułach i heurystykach (UI to pokazuje). Żeby włączyć model lokalny:
 
 **Wariant A: Ollama na hoście (Windows/macOS, korzysta z GPU).** Zainstaluj [Ollamę](https://ollama.com) i pobierz modele. Backend w kontenerze łączy się z nią przez `host.docker.internal`.
@@ -96,14 +98,19 @@ Model lokalny: jak w wariancie A powyżej. Backend czyta `.env` z katalogu głó
 
 ### Konta demo (hasło `demo123`)
 
+Każdy pracownik w danych demo ma własne konto — login to służbowy adres w formacie
+`imie.nazwisko@demo.gov.pl` (np. `anna.kowalska@demo.gov.pl`). W urzędzie format adresu może być inny;
+administrator lub HR ustawia go w polu **E-mail** przy dodawaniu i edycji pracownika.
+
 | Rola | E-mail | Co zobaczysz |
 |---|---|---|
-| Przełożony | `kierownik@demo.gov.pl` | Marek Zieliński, Wydział Cyfryzacji: każdy etap procesu na innej osobie, przypomnienia, asystent AI, HR partner, IPR |
-| Pracownik | `pracownik@demo.gov.pl` | Anna Kowalska: samoocena, potwierdzenia, zapoznanie z oceną, sprzeciw, wniosek o zmianę terminu, IPR |
-| HR / DG | `hr@demo.gov.pl` | Kadry (pracownicy, schemat urzędu, zastępstwa, import, zestawienia), sprzeciwy, zatwierdzanie IPR, dashboard |
+| Przełożony | `marek.zielinski@demo.gov.pl` | Marek Zieliński, Wydział Cyfryzacji: każdy etap procesu na innej osobie, przypomnienia, asystent AI, HR partner, IPR |
+| Pracownik | `anna.kowalska@demo.gov.pl` | Anna Kowalska: samoocena, potwierdzenia, zapoznanie z oceną, sprzeciw, wniosek o zmianę terminu, IPR |
+| HR | `hr@demo.gov.pl` | Kadry (pracownicy, schemat urzędu, zastępstwa, import, zestawienia), sprzeciwy, zatwierdzanie IPR, dashboard |
+| Dyrektor generalny | `waclaw.zawadzki@demo.gov.pl` | Wacław Zawadzki: przełożony naczelników wydziałów - ocenia ich (arkusz B); na `/me` widzi własną ocenę okresową |
 | Administrator | `admin@demo.gov.pl` | wszyscy pracownicy, **tryb korekty błędów** w arkuszach (z powodem i historią), kadry |
-| Przełożona | `kierownik.obsluga@demo.gov.pl` | Ewa Dąbrowska: „łagodna” oceniająca na dashboardzie; po wprowadzeniu zastępstwa przejmuje zespół Marka |
-| Przełożony | `kierownik.finanse@demo.gov.pl` | Andrzej Krawczyk: „surowy” oceniający, wydział z ocenami negatywnymi |
+| Przełożona | `ewa.dabrowska@demo.gov.pl` | Ewa Dąbrowska: „łagodna” oceniająca na dashboardzie; po wprowadzeniu zastępstwa przejmuje zespół Marka |
+| Przełożony | `andrzej.krawczyk@demo.gov.pl` | Andrzej Krawczyk: „surowy” oceniający, wydział z ocenami negatywnymi |
 
 Etapy w danych demo (zespół kierownika): **Jakub** - wyznaczenie kryteriów (nowa umowa), **Tomasz** - okres oceny z terminem przesuniętym o nieobecność, **Magdalena** - okres oceny, „warto docenić”, **Anna** i **Piotr** - przygotowanie oceny, **Katarzyna** - brak arkusza i sygnały przeciążenia.
 
@@ -139,6 +146,16 @@ Szczegóły: [ARCHITECTURE.md](ARCHITECTURE.md) oraz decyzje w [docs/adr](docs/a
 ## Aktualizacja w urzędzie
 
 Nowa wersja to nowy obraz Dockera. Przy starcie backend sam wykonuje migracje bazy (Alembic, `backend/app/migrations`), więc dane zostają. Bez Dockera: `git pull`, `pip install -e .`, restart. Nową migrację po zmianie modelu tworzy `python -m app.db revision "opis"`.
+
+Kolejność w urzędzie:
+
+```powershell
+.\scripts\backup-postgres.ps1                  # 1. kopia bazy + .env + metadane (wersja, rewizja Alembica)
+docker compose up -d --build                   # 2. nowy obraz; migracje wykonają się przy starcie
+.\scripts\backup-postgres.ps1 -Restore backup\app_20261121_180000.dump   # 3. w razie problemu: powrót do kopii
+```
+
+Zasady: **nigdy `docker compose down -v`** (flaga `-v` usuwa wolumen `pgdata`, czyli bazę); rollback robi się odtworzeniem kopii, nie `alembic downgrade`; zmiany kryteriów i szkoleń z `seed/*.json` trafiają do działającej bazy migracją danych (wzorzec: `0009_upsert_kryteria`), bo seed wypełnia tylko puste tabele; po zmianie `EMBEDDING_MODEL` trzeba przeliczyć embeddingi przepisów. Szczegóły i lista rzeczy do dokończenia: [ADR 0005](docs/adr/0005-pakowanie-windows-i-migracje.md).
 
 ## Bezpieczeństwo, RODO, AI Act
 

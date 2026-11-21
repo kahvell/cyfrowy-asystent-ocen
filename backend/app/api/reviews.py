@@ -4,6 +4,7 @@ Kolejność etapów i to, kiedy które pole arkusza można edytować, odwzorowuj
 oraz przypadki użycia KPRM - szczegóły w app/services/process.py.
 """
 
+import unicodedata
 from datetime import date, datetime, timedelta
 from typing import Literal
 
@@ -31,6 +32,7 @@ from app.services import deadlines as dl
 from app.services.access import ensure_employee_access, get_review_for, is_manager_of, is_reviewer
 from app.services.audit import audit
 from app.services.cycle import CycleError, start_next_cycle, start_review
+from app.services.form_pdf import render_review_pdf
 from app.services.notify import notify_employee, notify_hr, notify_reviewer
 from app.services.process import (
     CRITERIA_FIELDS,
@@ -140,6 +142,25 @@ def review_evidence(review_id: int, user: User = Depends(get_current_user), sess
     crit = {c.id: c for c in all_criteria(session)}
     authors = {u.id: u for u in session.exec(select(User).where(User.id.in_({n.author_id for n in notes}))).all()}
     return [serialize_note(n, tags.get(n.id, []), crit, authors) for n in notes]
+
+
+def _ascii(value: str) -> str:
+    """Nazwa pliku w nagłówku HTTP musi być w ASCII (nagłówki kodowane latin-1)."""
+    return unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode() or "ocena"
+
+
+@router.get("/reviews/{review_id}/form.pdf")
+def review_form_pdf(review_id: int, user: User = Depends(get_current_user),
+                    session: Session = Depends(get_session)):
+    """Arkusz oceny (A/B/C) jako plik PDF - wzory: załączniki nr 2-4 rozporządzenia PRM (Dz.U. 2016 poz. 470)."""
+    review = get_review_for(session, user, review_id)
+    audit(session, user, "export", "review", review.id)
+    session.commit()
+    data = serialize_review(session, review, viewer_is_reviewer=is_reviewer(session, user, review))
+    emp = session.get(Employee, review.employee_id)
+    filename = f"arkusz-oceny-{review.sheet_type}-{review.id}-{_ascii(emp.full_name if emp else '')}.pdf"
+    return Response(content=render_review_pdf(data), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 class CriterionPatch(BaseModel):
@@ -828,6 +849,10 @@ def invite_ics(review_id: int, kind: Literal["opening", "assessment", "feedback"
         f"DTSTAMP:{fmt(datetime.now())}", f"DTSTART:{fmt(start)}", f"DTEND:{fmt(end)}",
         f"SUMMARY:{esc(titles[kind] + ' - ' + emp.full_name)}", f"DESCRIPTION:{esc(desc[kind])}",
         "END:VEVENT", "END:VCALENDAR", ""])
+    if kind == "assessment":
+        # zaproszenie na rozmowę oceniającą odblokowuje pola tego etapu (datę rozmowy i jej potwierdzenie)
+        review.assessment_invited_at = utcnow()
+        session.add(review)
     notify_employee(session, review, titles[kind].split(" (")[0] + " - zaproszenie",
                     f"Termin: {start.strftime('%d.%m.%Y, godz. %H:%M')}. {desc[kind]}")
     audit(session, user, "invite", "review", review.id, kind=kind)

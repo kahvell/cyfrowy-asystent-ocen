@@ -162,6 +162,7 @@ def serialize_review(session: Session, review: Review, *, viewer_is_reviewer: bo
         # --- pola arkusza (części I-III) i proces ---
         **form_people(session, review),
         "attempt": review.attempt,
+        "assessment_invited_at": iso(review.assessment_invited_at),
         "opening_conversation_date": iso(review.opening_conversation_date),
         "opening_notes": review.opening_notes,
         "criteria_reviewer_confirmed_at": iso(review.criteria_reviewer_confirmed_at),

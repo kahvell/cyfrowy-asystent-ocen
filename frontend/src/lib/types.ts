@@ -120,6 +120,7 @@ export interface Review {
   employee_form: FormPerson;
   reviewer_form: FormPerson;
   attempt: number;
+  assessment_invited_at: string | null;
   opening_conversation_date: string | null;
   opening_notes: string;
   criteria_reviewer_confirmed_at: string | null;

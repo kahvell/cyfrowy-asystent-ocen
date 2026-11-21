@@ -10,18 +10,25 @@ import { api, setToken } from "@/lib/api";
 import type { Me } from "@/lib/types";
 
 // Konta demonstracyjne (hasło demo123) - każde pokazuje inną część systemu.
+// Każdy pracownik w danych demo ma własne konto w formacie imie.nazwisko@demo.gov.pl.
 const DEMO = [
   {
-    email: "kierownik@demo.gov.pl",
+    email: "marek.zielinski@demo.gov.pl",
     label: "Przełożony",
     who: "Marek Zieliński · Wydział Cyfryzacji",
     hint: "zespół na różnych etapach oceny, przypomnienia, asystent AI, HR partner, IPR",
   },
   {
-    email: "pracownik@demo.gov.pl",
+    email: "anna.kowalska@demo.gov.pl",
     label: "Pracownik",
     who: "Anna Kowalska",
     hint: "samoocena, potwierdzenia, zapoznanie z oceną, sprzeciw, wniosek o zmianę terminu",
+  },
+  {
+    email: "piotr.nowak@demo.gov.pl",
+    label: "Pracownik (kolejne konto)",
+    who: "Piotr Nowak",
+    hint: "każdy pracownik ma własne konto służbowe; tu ocena z „zapomnianymi” obserwacjami",
   },
   {
     email: "hr@demo.gov.pl",
@@ -36,13 +43,13 @@ const DEMO = [
     hint: "tryb korekty błędów w arkuszach, pełny dostęp do kadr",
   },
   {
-    email: "kierownik.obsluga@demo.gov.pl",
+    email: "ewa.dabrowska@demo.gov.pl",
     label: "Przełożona (zastępstwo)",
     who: "Ewa Dąbrowska · Obsługa Klienta",
     hint: "„łagodna” oceniająca na dashboardzie; po wprowadzeniu zastępstwa przejmuje zespół Marka",
   },
   {
-    email: "kierownik.finanse@demo.gov.pl",
+    email: "andrzej.krawczyk@demo.gov.pl",
     label: "Przełożony (surowy)",
     who: "Andrzej Krawczyk · Finanse",
     hint: "„surowy” oceniający w kalibracji; wydział z ocenami negatywnymi",
@@ -52,7 +59,7 @@ const DEMO = [
 export default function LoginPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const [email, setEmail] = useState("kierownik@demo.gov.pl");
+  const [email, setEmail] = useState("marek.zielinski@demo.gov.pl");
   const [password, setPassword] = useState("demo123");
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);

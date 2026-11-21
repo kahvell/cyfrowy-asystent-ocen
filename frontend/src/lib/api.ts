@@ -64,3 +64,25 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
+function filenameFrom(res: Response, fallback: string): string {
+  const cd = res.headers.get("Content-Disposition") ?? "";
+  const m = /filename="?([^";]+)"?/.exec(cd);
+  return m ? m[1] : fallback;
+}
+
+export async function downloadFile(path: string, fallbackName: string): Promise<void> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(`/api${path}`, { headers });
+  if (!res.ok) throw new ApiError(res.status, `Błąd ${res.status}`);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filenameFrom(res, fallbackName);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

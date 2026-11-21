@@ -47,7 +47,7 @@ def test_change_of_reviewer_moves_active_review(client, hr):
     r = client.patch(f"/admin/employees/{piotr['id']}", headers=hr,
                      json={"manager_id": other["id"], "reason": "przeniesienie do Wydziału Finansów"})
     assert r.status_code == 200 and r.json()["reviews_moved"]
-    fin = client.post("/auth/login", json={"email": "kierownik.finanse@demo.gov.pl", "password": "demo123"}).json()
+    fin = client.post("/auth/login", json={"email": "andrzej.krawczyk@demo.gov.pl", "password": "demo123"}).json()
     h = {"Authorization": f"Bearer {fin['access_token']}"}
     assert client.get(f"/reviews/{piotr['review']['id']}", headers=h).status_code == 200
     assert any("Przejmujesz" in n["subject"] for n in client.get("/notifications", headers=h).json())
@@ -69,7 +69,7 @@ def test_terminate_keeps_reviews_deletes_notes(client, hr, manager):
     zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
     e = client.post("/admin/employees", headers=hr, json={
         "full_name": "Olga Odchodząca", "position": "Inspektor", "department_id": struct["departments"][0]["id"],
-        "manager_id": zielinski["id"]}).json()
+        "manager_id": zielinski["id"], "email": "olga.odchodzaca@demo.gov.pl"}).json()
     client.post(f"/employees/{e['id']}/notes", headers=manager, json={"text": "Notatka robocza przełożonego."})
     r = client.post(f"/admin/employees/{e['id']}/terminate", headers=hr, json={"employment_end": "2026-11-30"})
     assert r.status_code == 200 and r.json()["notes_deleted"] == 1

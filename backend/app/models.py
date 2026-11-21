@@ -193,6 +193,9 @@ class Review(SQLModel, table=True):
     updated_at: NaiveDatetime = Field(default_factory=utcnow)
     submitted_at: NaiveDatetime | None = None
     finalized_at: NaiveDatetime | None = None
+    # moment wysłania zaproszenia (.ics) na rozmowę oceniającą; do tego czasu pola etapu „Rozmowa oceniająca”
+    # pozostają zablokowane (rozmowę trzeba najpierw umówić)
+    assessment_invited_at: NaiveDatetime | None = None
 
 
 class ReviewCriterion(SQLModel, table=True):

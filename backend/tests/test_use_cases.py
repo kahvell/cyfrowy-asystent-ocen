@@ -26,7 +26,7 @@ def test_office_structure(client, hr, manager):
 def test_substitution_gives_deputy_the_team(client, hr):
     emps = _emps(client, hr)
     marek, ewa = emps["Marek Zieliński"], emps["Ewa Dąbrowska"]
-    ewa_h = _login(client, "kierownik.obsluga@demo.gov.pl")
+    ewa_h = _login(client, "ewa.dabrowska@demo.gov.pl")
     anna_id = emps["Anna Kowalska"]["id"]
     assert client.get(f"/employees/{anna_id}", headers=ewa_h).status_code == 403
     today = date.today()
@@ -48,7 +48,8 @@ def test_historical_review_drives_deadlines(client, hr, manager):
     zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
     e = client.post("/admin/employees", headers=hr, json={
         "full_name": "Hanna Historyczna", "position": "Specjalista", "department_id": struct["departments"][0]["id"],
-        "manager_id": zielinski["id"], "employment_start": "2015-01-05", "contract_type": "nieokreslony"}).json()
+        "manager_id": zielinski["id"], "employment_start": "2015-01-05", "contract_type": "nieokreslony",
+        "email": "hanna.historyczna@demo.gov.pl"}).json()
     cycle = next(c for c in client.get("/cycles", headers=manager).json() if c["status"] == "open")
     rv = client.post("/reviews", headers=manager, json={"employee_id": e["id"], "cycle_id": cycle["id"]}).json()
     # bez historii: 24 mies. od zatrudnienia (2015) - termin dawno minął

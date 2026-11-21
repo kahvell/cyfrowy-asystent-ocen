@@ -32,19 +32,24 @@ def _login(client, email: str) -> dict:
 
 @pytest.fixture(scope="session")
 def manager(client):
-    return _login(client, "kierownik@demo.gov.pl")
+    return _login(client, "marek.zielinski@demo.gov.pl")
 
 
 @pytest.fixture(scope="session")
 def other_manager(client):
-    return _login(client, "kierownik.finanse@demo.gov.pl")
+    return _login(client, "andrzej.krawczyk@demo.gov.pl")
 
 
 @pytest.fixture(scope="session")
 def employee(client):
-    return _login(client, "pracownik@demo.gov.pl")
+    return _login(client, "anna.kowalska@demo.gov.pl")
 
 
 @pytest.fixture(scope="session")
 def hr(client):
     return _login(client, "hr@demo.gov.pl")
+
+
+@pytest.fixture(scope="session")
+def admin(client):
+    return _login(client, "admin@demo.gov.pl")

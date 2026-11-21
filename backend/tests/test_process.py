@@ -126,8 +126,24 @@ def test_reminders(client, manager, employee, hr):
     kinds = {x["kind"] for x in m}
     assert "criteria_deadline" in kinds or "employee_confirm_criteria" in kinds
     assert all({"title", "due", "severity", "link"} <= set(x) for x in m)
+    # rozdzielenie widoków: /team (scope=team) - zadania o zespole, /me (scope=self) - sprawy własne ocenianego
+    self_kinds = {"confirm_criteria", "acknowledge", "review_due_employee", "objection_window"}
+    team = client.get("/reminders?scope=team", headers=manager).json()
+    own = client.get("/reminders?scope=self", headers=manager).json()
+    assert team and all(x["kind"] not in self_kinds for x in team)
+    assert all(x["kind"] in self_kinds for x in own)
     assert client.get("/reminders", headers=employee).status_code == 200
     assert client.get("/reminders", headers=hr).status_code == 200
+
+
+def test_manager_sees_own_review_from_director(client, manager):
+    """Przełożony (naczelnik) na /me widzi własną ocenę okresową sporządzoną przez dyrektora generalnego,
+    a nie tylko zadania o podwładnych (art. 81 ust. 1 ustawy)."""
+    me = client.get("/me", headers=manager).json()
+    emp = client.get(f"/employees/{me['employee_id']}", headers=manager).json()
+    assert emp["manager_name"] == "Wacław Zawadzki"
+    assert emp["reviews"], "naczelnik powinien mieć własną ocenę okresową"
+    assert any(r["overall_level"] for r in emp["reviews"])
 
 
 def test_hr_partner_signals_and_access(client, manager, employee, hr):
@@ -162,6 +178,16 @@ def test_calendar_invite(client, manager):
     r = client.get(f"/reviews/{rid}/invite.ics?kind=assessment&when=2026-12-01T10:00", headers=manager)
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/calendar")
     assert "BEGIN:VEVENT" in r.text and "DTSTART:20261201T100000" in r.text
+
+
+def test_assessment_invite_unlocks_stage_four(client, manager):
+    """Przed odblokowaniem pól etapu „Rozmowa oceniająca” trzeba umówić rozmowę - zaproszenie (.ics) zapisuje
+    datę `assessment_invited_at`, na której opiera się odblokowanie."""
+    rid = _review_of(client, manager, "Anna Kowalska")
+    assert client.get(f"/reviews/{rid}", headers=manager).json()["assessment_invited_at"] is None
+    r = client.get(f"/reviews/{rid}/invite.ics?kind=assessment&when=2026-12-05T10:00", headers=manager)
+    assert r.status_code == 200
+    assert client.get(f"/reviews/{rid}", headers=manager).json()["assessment_invited_at"] is not None
 
 
 def test_period_from_is_criteria_acknowledgement_date(client, manager):

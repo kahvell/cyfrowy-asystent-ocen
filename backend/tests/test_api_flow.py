@@ -6,11 +6,11 @@ def _team(client, h):
 
 
 def test_login_rejects_bad_password(client):
-    r = client.post("/auth/login", json={"email": "kierownik@demo.gov.pl", "password": "zle"})
+    r = client.post("/auth/login", json={"email": "marek.zielinski@demo.gov.pl", "password": "zle"})
     assert r.status_code == 401
 
 
-def test_access_control(client, manager, other_manager, employee, hr):
+def test_access_control(client, manager, other_manager, employee, hr, admin):
     team = _team(client, manager)
     anna = team["Anna Kowalska"]
     # inny kierownik nie widzi cudzych podwładnych
@@ -20,6 +20,8 @@ def test_access_control(client, manager, other_manager, employee, hr):
     assert client.get(f"/employees/{anna['id']}/notes", headers=hr).status_code == 403
     assert client.get("/analytics/overview", headers=hr).status_code == 200
     assert client.get("/analytics/overview", headers=manager).status_code == 403
+    # dashboard urzędu jest tylko dla HR; administrator ma tryb korekty i panel kadrowy
+    assert client.get("/analytics/overview", headers=admin).status_code == 403
     # pracownik widzi notatki o sobie (przejrzystość)
     assert client.get(f"/employees/{anna['id']}/notes", headers=employee).status_code == 200
 
@@ -139,3 +141,15 @@ def test_legal_qa_cites_regulation(client, manager):
                     json={"question": "Czy muszę pisać uzasadnienie oceny negatywnej?"}).json()
     refs = [c["ref"] for c in r["citations"]]
     assert any("§ 11" in ref for ref in refs), refs
+
+
+def test_review_form_pdf(client, manager, other_manager, employee):
+    review_id = _team(client, manager)["Anna Kowalska"]["current_review"]["id"]
+    r = client.get(f"/reviews/{review_id}/form.pdf", headers=manager)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content.startswith(b"%PDF")
+    assert "attachment" in r.headers["content-disposition"]
+    # dostęp tylko dla uprawnionych do oceny
+    assert client.get(f"/reviews/{review_id}/form.pdf", headers=other_manager).status_code == 403
+    assert client.get(f"/reviews/{review_id}/form.pdf", headers=employee).status_code == 200

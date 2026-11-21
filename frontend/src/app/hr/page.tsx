@@ -71,7 +71,7 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
     civil_grade_date: emp?.civil_grade_date ?? "",
     position_description: emp?.position_description ?? "",
     senior_position: emp?.senior_position ?? false,
-    email: "",
+    email: emp?.email ?? "",
     reason: "",
     significant_change_date: "",
   });
@@ -90,9 +90,9 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
         significant_change_date: f.significant_change_date || undefined,
       };
       return emp
-        ? api<{ reviews_moved?: number[]; position_change?: { effect: string; criteria_deadline?: string; due_date?: string }[] }>(`/admin/employees/${emp.id}`, {
+        ? api<{ reviews_moved?: number[]; initial_password?: string | null; position_change?: { effect: string; criteria_deadline?: string; due_date?: string }[] }>(`/admin/employees/${emp.id}`, {
             method: "PATCH",
-            json: { ...json, email: undefined },
+            json,
           })
         : api<{ initial_password?: string | null }>("/admin/employees", { method: "POST", json: { ...json, reason: undefined, significant_change_date: undefined } });
     },
@@ -225,12 +225,22 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
         <Label htmlFor="desc">Opis stanowiska (główne obowiązki)</Label>
         <Textarea id="desc" rows={2} value={f.position_description} onChange={(e) => set("position_description", e.target.value)} />
       </div>
-      {!emp && (
-        <div className="sm:col-span-2">
-          <Label htmlFor="mail">E-mail służbowy (utworzy konto w systemie)</Label>
-          <Input id="mail" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="opcjonalnie" />
-        </div>
-      )}
+      <div className="sm:col-span-2">
+        <Label htmlFor="mail">E-mail służbowy (login do systemu)</Label>
+        <Input
+          id="mail"
+          type="email"
+          required
+          value={f.email}
+          onChange={(e) => set("email", e.target.value)}
+          placeholder="imie.nazwisko@demo.gov.pl"
+        />
+        <p className="mt-1 text-xs text-muted">
+          {emp
+            ? "Adres konta w systemie. Format zależy od urzędu - możesz go zmienić."
+            : "Pracownik dostanie konto z tym adresem i hasło startowe do przekazania bezpiecznym kanałem."}
+        </p>
+      </div>
       <div className="flex gap-2 sm:col-span-2">
         <Button type="submit" loading={save.isPending}>
           {emp ? "Zapisz zmiany" : "Dodaj pracownika"}
@@ -490,6 +500,7 @@ export default function HrPage() {
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
                   {th("full_name", "Pracownik")}
+                  <th className="px-4 py-3 font-medium">E-mail</th>
                   {th("department", "Komórka")}
                   {th("manager_name", "Oceniający")}
                   <th className="px-4 py-3 font-medium">Arkusz</th>
@@ -508,6 +519,7 @@ export default function HrPage() {
                         {!e.active && ` · zatrudnienie do ${fmtDate(e.employment_end)}`}
                       </div>
                     </td>
+                    <td className="px-4 py-2.5 text-xs">{e.email ?? <span className="text-muted">brak konta</span>}</td>
                     <td className="px-4 py-2.5">{e.department}</td>
                     <td className="px-4 py-2.5">{e.manager_name ?? "-"}</td>
                     <td className="px-4 py-2.5">{e.sheet_type}</td>

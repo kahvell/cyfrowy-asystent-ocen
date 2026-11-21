@@ -64,7 +64,8 @@ def seed_demo(session: Session) -> None:
     rnd = random.Random(2026)
     pw = hash_password(D.DEMO_PASSWORD)
     crit = {c.code: c for c in session.exec(select(Criterion)).all()}
-    mandatory_c = [c for c in crit.values() if "C" in c.mandatory_for]
+    # kryteria obowiązkowe dla każdego arkusza (zał. 2 = A, zał. 3 = B, zał. 4 = C rozporządzenia)
+    mandatory = {s: [c for c in crit.values() if s in c.mandatory_for] for s in ("A", "B", "C")}
 
     office = Office(name=D.OFFICE, city=D.OFFICE_CITY)
     session.add(office)
@@ -74,16 +75,32 @@ def seed_demo(session: Session) -> None:
     session.add_all([prev, cur])
     session.flush()
 
+    # dyrektor generalny - bezpośredni przełożony naczelników wydziałów (art. 81 ust. 1 ustawy)
+    dg_dept = Department(office_id=office.id, name=D.DIRECTOR_DEPT)
+    session.add(dg_dept)
+    session.flush()
+    dname, dgender, dpos = D.DIRECTOR
+    director = Employee(full_name=dname, gender=dgender, position=dpos, department_id=dg_dept.id, sheet_type="A",
+                        is_civil_servant=True, senior_position=True, contract_type="mianowanie",
+                        position_description=f"Kierowanie urzędem: {D.DIRECTOR_DEPT}.")
+    session.add(director)
+    session.flush()
+    dg_user = User(email=D.DIRECTOR_LOGIN[0], full_name=dname, password_hash=pw, role="manager",
+                   employee_id=director.id)
+    session.add(dg_user)
+    session.flush()
+
     employees: dict[str, Employee] = {}
     managers: dict[str, User] = {}
+    heads: dict[str, Employee] = {}
     for dept_def in D.DEPARTMENTS:
         dept = Department(office_id=office.id, name=dept_def["name"])
         session.add(dept)
         session.flush()
         hname, hgender, hpos = dept_def["head"]
         # kierujący wydziałem w urzędzie wojewódzkim - wyższe stanowisko w służbie cywilnej (art. 52 pkt 2)
-        head = Employee(full_name=hname, gender=hgender, position=hpos, department_id=dept.id, sheet_type="B",
-                        is_civil_servant=True, senior_position=True, contract_type="mianowanie",
+        head = Employee(full_name=hname, gender=hgender, position=hpos, department_id=dept.id, manager_id=director.id,
+                        sheet_type="B", is_civil_servant=True, senior_position=True, contract_type="mianowanie",
                         position_description=f"Kierowanie komórką: {dept.name}.")
         session.add(head)
         session.flush()
@@ -91,6 +108,30 @@ def seed_demo(session: Session) -> None:
         session.add(muser)
         session.flush()
         managers[dept_def["name"]] = muser
+        heads[dept_def["name"]] = head
+
+        # --- poprzedni cykl: ocena naczelnika sporządzona przez dyrektora generalnego (arkusz B) ---
+        hr = Review(employee_id=head.id, reviewer_id=dg_user.id, cycle_id=prev.id, status="acknowledged",
+                    sheet_type="B", period_start=prev.period_start, period_end=prev.period_end,
+                    due_date=dl.review_due_date(prev.period_start), criteria_deadline=date(2023, 1, 2),
+                    opening_conversation_date=date(2022, 12, 14), criteria_reviewer_confirmed_at=date(2022, 12, 14),
+                    criteria_employee_confirmed_at=date(2022, 12, 15), criteria_reviewer_place=D.OFFICE_CITY,
+                    criteria_employee_place=D.OFFICE_CITY, reviewer_place=D.OFFICE_CITY, employee_place=D.OFFICE_CITY,
+                    conversation_date=date(2024, 11, 18), reviewer_signed_at=date(2024, 11, 22),
+                    acknowledged_at=date(2024, 11, 26), promotion_request="nie",
+                    submitted_at=utcnow(), finalized_at=utcnow(),
+                    ipr_conclusions="Rozwój kompetencji kierowniczych (dane demonstracyjne).")
+        session.add(hr)
+        session.flush()
+        hscores = []
+        for c in mandatory["B"]:
+            s = _snap(rnd.uniform(5.2, 7.6))
+            hscores.append(s)
+            session.add(ReviewCriterion(review_id=hr.id, criterion_id=c.id, score=s,
+                                        justification="(ocena archiwalna - dane demonstracyjne)"))
+        hout = compute_outcome(hscores)
+        hr.overall_score, hr.overall_level, hr.result = hout.average, hout.level, hout.result
+        session.add(hr)
         for name, gender, pos, civil, desc in dept_def["staff"]:
             e = Employee(full_name=name, gender=gender, position=pos, department_id=dept.id, manager_id=head.id,
                          sheet_type="C", is_civil_servant=civil, position_description=desc,
@@ -102,6 +143,9 @@ def seed_demo(session: Session) -> None:
             session.add(e)
             session.flush()
             employees[name] = e
+            # każdy pracownik ma konto w systemie (hasło demo) - e-mail imie.nazwisko@demo.gov.pl
+            session.add(User(email=D.email_for(name), full_name=name, password_hash=pw, role="employee",
+                             employee_id=e.id))
 
         # --- poprzedni cykl: oceny sporządzone i przyjęte do wiadomości (dashboard, historia ocen) ---
         for name, *_ in dept_def["staff"]:
@@ -123,7 +167,7 @@ def seed_demo(session: Session) -> None:
             session.add(r)
             session.flush()
             scores = []
-            for c in mandatory_c:
+            for c in mandatory["C"]:
                 s = D.PREV_FIXED.get(name) or _snap(base + rnd.gauss(0, 1.3))
                 scores.append(s)
                 session.add(ReviewCriterion(review_id=r.id, criterion_id=c.id, score=s,
@@ -140,10 +184,8 @@ def seed_demo(session: Session) -> None:
                                          model="ollama_chat/bielik (demo)", prompt_version="draft_justification.v1",
                                          status=status, decided_at=utcnow(), decided_by=muser.id))
 
-    # --- konta pomocnicze ---
+    # --- konta pomocnicze (kadry i administrator; konta pracowników powstały w pętli wydziałów) ---
     anna = employees[D.EMPLOYEE_LOGIN[1]]
-    session.add(User(email=D.EMPLOYEE_LOGIN[0], full_name=anna.full_name, password_hash=pw, role="employee",
-                     employee_id=anna.id))
     session.add(User(email=D.HR_USER[0], full_name=D.HR_USER[1], password_hash=pw, role="hr"))
     session.add(User(email=D.ADMIN_USER[0], full_name=D.ADMIN_USER[1], password_hash=pw, role="admin"))
     session.flush()
@@ -169,9 +211,11 @@ def seed_demo(session: Session) -> None:
             session.add(Absence(employee_id=employees[name].id, start=start, end=end, kind=kind))
     session.flush()
 
-    def current_review(e: Employee, status: str, additional: tuple[str, ...] = ()) -> Review:
+    def current_review(e: Employee, status: str, additional: tuple[str, ...] = (), *,
+                       sheet_type: str = "C", reviewer: User | None = None) -> Review:
         """Ocena w bieżącym cyklu; etap I (kryteria + rozmowa rozpoczynająca) potwierdzony, chyba że status=criteria."""
-        r = Review(employee_id=e.id, reviewer_id=cyf_manager.id, cycle_id=cur.id, sheet_type="C", status=status,
+        who = reviewer or cyf_manager
+        r = Review(employee_id=e.id, reviewer_id=who.id, cycle_id=cur.id, sheet_type=sheet_type, status=status,
                    period_start=max(cur.period_start, e.employment_start or cur.period_start),
                    period_end=cur.period_end, criteria_reviewer_place=D.OFFICE_CITY,
                    promotion_request="nie" if e.is_civil_servant else "nie_dotyczy")
@@ -191,13 +235,17 @@ def seed_demo(session: Session) -> None:
             if e.is_civil_servant:
                 r.appointment_year, r.civil_grade = e.appointment_year, e.civil_grade
                 r.civil_grade_date = e.civil_grade_date
-        for c in mandatory_c:
+        for c in mandatory[sheet_type]:
             session.add(ReviewCriterion(review_id=r.id, criterion_id=c.id))
         for code in additional:
             session.add(ReviewCriterion(review_id=r.id, criterion_id=crit[code].id, is_additional=True))
         session.add(r)
         session.flush()
         return r
+
+    # --- bieżący cykl: oceny naczelników wydziałów sporządza dyrektor generalny (arkusz B) ---
+    for head in heads.values():
+        current_review(head, "observation", sheet_type="B", reviewer=dg_user)
 
     # --- bieżący cykl: ocena Anny (szkic + samoocena) ---
     r_anna = current_review(anna, "draft", ("KREATYWNOSC",))

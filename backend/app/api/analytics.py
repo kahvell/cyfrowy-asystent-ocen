@@ -8,7 +8,8 @@ from app.security import require_roles
 from app.services.audit import audit
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
-hr_only = require_roles("hr", "admin")
+# dashboard urzędu jest wyłącznie dla HR - administrator ma tryb korekty i panel kadrowy
+hr_only = require_roles("hr")
 
 
 def _cycle(session: Session, cycle_id: int | None) -> int | None:
