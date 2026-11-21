@@ -70,6 +70,8 @@ def test_acknowledgement_objection_and_decision(client, manager, employee, hr):
     if r["status"] != "final":
         pytest.skip("wymaga oceny zatwierdzonej w test_api_flow")
     assert r["reviewer_signed_at"] == date.today().isoformat()
+    # objaśnienie 7 do arkusza: „okres do” = data sporządzenia oceny na piśmie
+    assert r["period_end"] == date.today().isoformat()
     # HR (komórka kadrowa) widzi sporządzony arkusz
     assert client.get(f"/reviews/{rid}", headers=hr).status_code == 200
 
@@ -134,3 +136,14 @@ def test_calendar_invite(client, manager):
     r = client.get(f"/reviews/{rid}/invite.ics?kind=assessment&when=2026-12-01T10:00", headers=manager)
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/calendar")
     assert "BEGIN:VEVENT" in r.text and "DTSTART:20261201T100000" in r.text
+
+
+def test_period_from_is_criteria_acknowledgement_date(client, manager):
+    """Objaśnienie 6 do arkusza: „okres od” = data zapoznania ocenianego z kryteriami (część I)."""
+    rid = _review_of(client, manager, "Tomasz Wójcik")
+    before = client.get(f"/reviews/{rid}", headers=manager).json()
+    r = client.post(f"/reviews/{rid}/start", headers=manager).json()
+    assert r["status"] == "draft"
+    assert r["period_start"] == before["criteria_employee_confirmed_at"] == "2024-12-11"
+    # termin oceny liczony dalej od początku okresu (24 mies.), nie od daty zapoznania z kryteriami
+    assert r["deadlines"]["due_date"] == before["deadlines"]["due_date"]

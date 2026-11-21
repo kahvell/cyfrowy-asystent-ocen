@@ -25,6 +25,7 @@ interface HrEmployee {
   civil_grade_date: string | null;
   position_description: string;
   active: boolean;
+  senior_position: boolean;
   email: string | null;
   role: string | null;
   review: { id: number; status: string; due_date: string | null } | null;
@@ -66,30 +67,47 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
     civil_grade: emp?.civil_grade ?? null,
     civil_grade_date: emp?.civil_grade_date ?? "",
     position_description: emp?.position_description ?? "",
+    senior_position: emp?.senior_position ?? false,
     email: "",
     reason: "",
+    significant_change_date: "",
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF({ ...f, [k]: v });
-  const save = useMutation<{ reviews_moved?: number[]; initial_password?: string | null }>({
+  const save = useMutation<{
+    reviews_moved?: number[];
+    initial_password?: string | null;
+    position_change?: { effect: string; criteria_deadline?: string; due_date?: string }[];
+  }>({
     mutationFn: () => {
       const json = {
         ...f,
         employment_start: f.employment_start || null,
         civil_grade_date: f.civil_grade_date || null,
         email: f.email || undefined,
+        significant_change_date: f.significant_change_date || undefined,
       };
       return emp
-        ? api<{ reviews_moved?: number[] }>(`/admin/employees/${emp.id}`, { method: "PATCH", json: { ...json, email: undefined } })
-        : api<{ initial_password?: string | null }>("/admin/employees", { method: "POST", json: { ...json, reason: undefined } });
+        ? api<{ reviews_moved?: number[]; position_change?: { effect: string; criteria_deadline?: string; due_date?: string }[] }>(`/admin/employees/${emp.id}`, {
+            method: "PATCH",
+            json: { ...json, email: undefined },
+          })
+        : api<{ initial_password?: string | null }>("/admin/employees", { method: "POST", json: { ...json, reason: undefined, significant_change_date: undefined } });
     },
     onSuccess: (r) => {
       invalidate();
       const moved = r.reviews_moved?.length ? `Zmiana oceniającego: przeniesiono ${r.reviews_moved.length} trwającą ocenę do nowego przełożonego.` : undefined;
       const pwd = r.initial_password ? `Konto utworzone. Hasło startowe: ${r.initial_password} (przekaż je bezpiecznym kanałem).` : undefined;
-      onDone(moved ?? pwd ?? "Zapisano.");
+      const pc = r.position_change?.[0];
+      const change = pc
+        ? pc.effect === "criteria_reopened"
+          ? `Zmiana stanowiska w ciągu 6 mies.: ponowna rozmowa i kryteria do ${fmtDate(pc.criteria_deadline)}, termin oceny bez zmian (§ 9 ust. 1).`
+          : `Zmiana stanowiska: ocena okresowa do ${fmtDate(pc.due_date)} (art. 81 ust. 6, § 9 ust. 2).`
+        : undefined;
+      onDone(change ?? moved ?? pwd ?? "Zapisano.");
     },
   });
   const managerChanged = emp && f.manager_id !== emp.manager_id;
+  const positionChanged = emp && (f.position !== emp.position || f.position_description !== emp.position_description);
 
   return (
     <form
@@ -137,6 +155,16 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
           <p className="mt-1 text-xs text-amber-800">Trwająca ocena przejdzie do nowego przełożonego (zmiana oceniającego, art. 81 ust. 8 pkt 1). Obie strony dostaną powiadomienie.</p>
         </div>
       )}
+      {positionChanged && (
+        <div className="sm:col-span-2">
+          <Label htmlFor="chg">Data zmiany stanowiska - wypełnij, jeśli wiąże się z istotną zmianą zakresu obowiązków</Label>
+          <Input id="chg" type="date" value={f.significant_change_date} onChange={(e) => set("significant_change_date", e.target.value)} className="w-auto" />
+          <p className="mt-1 text-xs text-muted">
+            W ciągu 6 mies. od ustalenia kryteriów lub ostatniej oceny: ponowna rozmowa i kryteria w 30 dni (§ 9 ust. 1). Później: ocena w związku ze zmianą
+            stanowiska, od 7 dni przed do 30 dni po zmianie (art. 81 ust. 6, § 9 ust. 2).
+          </p>
+        </div>
+      )}
       <div>
         <Label htmlFor="sheet">Arkusz oceny</Label>
         <select id="sheet" className={select} value={f.sheet_type} onChange={(e) => set("sheet_type", e.target.value)}>
@@ -151,6 +179,10 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
       </div>
       <label className="flex items-center gap-2 text-sm sm:col-span-2">
         <input type="checkbox" checked={f.is_civil_servant} onChange={(e) => set("is_civil_servant", e.target.checked)} /> urzędnik służby cywilnej (mianowany)
+      </label>
+      <label className="flex items-center gap-2 text-sm sm:col-span-2">
+        <input type="checkbox" checked={f.senior_position} onChange={(e) => set("senior_position", e.target.checked)} /> wyższe stanowisko w służbie cywilnej
+        (art. 52, np. dyrektor generalny, kierujący wydziałem w urzędzie wojewódzkim) - bez IPR (art. 108)
       </label>
       {f.is_civil_servant && (
         <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">
@@ -266,11 +298,20 @@ function AbsencesPanel({ emp }: { emp: HrEmployee }) {
 function EmployeeDetail({ emp, structure, onClose }: { emp: HrEmployee; structure: Structure; onClose: (msg?: string) => void }) {
   const invalidate = useInvalidate();
   const [end, setEnd] = useState("");
+  const [askReview, setAskReview] = useState(false);
   const terminate = useMutation({
-    mutationFn: () => api<{ notes_deleted: number }>(`/admin/employees/${emp.id}/terminate`, { method: "POST", json: { employment_end: end } }),
+    mutationFn: () =>
+      api<{ notes_deleted: number; review_requested?: boolean }>(`/admin/employees/${emp.id}/terminate`, {
+        method: "POST",
+        json: { employment_end: end, review_requested: askReview },
+      }),
     onSuccess: (r) => {
       invalidate();
-      onClose(`Zakończono zatrudnienie. Oceny zostają w dokumentacji, usunięto ${r.notes_deleted} roboczych notatek przełożonego.`);
+      onClose(
+        r.review_requested
+          ? "Przekazano przełożonemu wniosek o ocenę okresową odchodzącego pracownika. Zakończ zatrudnienie po sporządzeniu oceny."
+          : `Zakończono zatrudnienie. Oceny zostają w dokumentacji, usunięto ${r.notes_deleted} roboczych notatek przełożonego.`,
+      );
     },
   });
   const remove = useMutation({
@@ -303,10 +344,14 @@ function EmployeeDetail({ emp, structure, onClose }: { emp: HrEmployee; structur
                 <UserMinus className="h-4 w-4" aria-hidden /> Ustanie zatrudnienia
               </h3>
               <p className="text-xs text-muted">Sporządzone oceny zostają w dokumentacji pracowniczej, robocze notatki przełożonego są usuwane, konto blokowane.</p>
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={askReview} onChange={(e) => setAskReview(e.target.checked)} /> pracownik wnioskuje o ocenę okresową przed odejściem
+                (Standardy ZZL, rozdz. VII pkt 3)
+              </label>
               <div className="flex gap-2">
                 <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="w-auto" aria-label="Data ustania zatrudnienia" />
                 <Button size="sm" variant="danger" disabled={!end} onClick={() => terminate.mutate()} loading={terminate.isPending}>
-                  Zakończ zatrudnienie
+                  {askReview ? "Przekaż wniosek o ocenę" : "Zakończ zatrudnienie"}
                 </Button>
               </div>
               <Button size="sm" variant="ghost" onClick={() => confirm(`Usunąć dane: ${emp.full_name}? Tylko dla danych wprowadzonych omyłkowo.`) && remove.mutate()}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CalendarPlus, CheckCircle2, FileSignature, Gavel, Printer, Scale, ShieldCheck, Stamp, Undo2 } from "lucide-react";
+import { AlertOctagon, CalendarClock, CalendarPlus, CheckCircle2, FileSignature, Gavel, Printer, Scale, ShieldCheck, Stamp, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useCriteria } from "@/components/notes";
@@ -90,6 +90,11 @@ export function DeadlinesBar({ review }: { review: Review }) {
       {!["final", "acknowledged", "objection"].includes(review.status) && <DeadlineChip label="termin sporządzenia oceny" date={d.due_date} warnDays={60} />}
       {d.objection_open && <DeadlineChip label="sprzeciw do" date={d.objection_deadline} />}
       {d.repeat_review_date && <DeadlineChip label="ponowna ocena (art. 81 ust. 9)" date={d.repeat_review_date} warnDays={60} />}
+      {d.termination_risk && (
+        <Badge tone="red" title="Dwukrotna, następująca po sobie negatywna ocena urzędnika służby cywilnej">
+          <AlertOctagon className="h-3 w-3" aria-hidden /> druga z rzędu ocena negatywna: rozwiązanie stosunku pracy (art. 71 ust. 1 pkt 1)
+        </Badge>
+      )}
       {d.obligatory_promotion && (
         <Badge tone="green">
           <Stamp className="h-3 w-3" aria-hidden /> obligatoryjny kolejny stopień służbowy (art. 89 ust. 2)

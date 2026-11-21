@@ -52,7 +52,8 @@ function Sign({ place, date, label, name }: { place: string; date: string | null
   );
 }
 
-function People({ title, p }: { title: string; p: Review["employee_form"] }) {
+// Wzór arkusza A (kierownik urzędu) nie ma pola „Komórka organizacyjna” w danych ocenianego i oceniającego.
+function People({ title, p, sheet }: { title: string; p: Review["employee_form"]; sheet: string }) {
   return (
     <>
       <tr>
@@ -68,7 +69,7 @@ function People({ title, p }: { title: string; p: Review["employee_form"] }) {
           ["Komórka organizacyjna", p.department],
           ["Stanowisko pracy", p.position],
         ] as const
-      ).map(([k, v]) => (
+      ).filter(([k]) => !(sheet === "A" && k === "Komórka organizacyjna")).map(([k, v]) => (
         <tr key={k}>
           <Cell className="w-1/3">{k}</Cell>
           <Cell>{v}</Cell>
@@ -127,8 +128,8 @@ export default function PrintReview() {
                 </Cell>
                 <Cell>{r.office.name}</Cell>
               </tr>
-              <People title="DANE OCENIANEGO" p={r.employee_form} />
-              <People title="DANE OCENIAJĄCEGO" p={r.reviewer_form} />
+              <People title="DANE OCENIANEGO" p={r.employee_form} sheet={r.sheet_type} />
+              <People title="DANE OCENIAJĄCEGO" p={r.reviewer_form} sheet={r.sheet_type} />
             </tbody>
           </table>
 
@@ -353,7 +354,7 @@ export default function PrintReview() {
           <div className="break-inside-avoid">
             <table className="mt-3 w-full border-collapse">
               <tbody>
-                <People title="DANE OCENIAJĄCEGO" p={r.reviewer_form} />
+                <People title="DANE OCENIAJĄCEGO" p={r.reviewer_form} sheet={r.sheet_type} />
               </tbody>
             </table>
             <Sign place={r.reviewer_place} date={r.reviewer_signed_at} label="podpis oceniającego" />

@@ -1,6 +1,21 @@
 # Ustawa z dnia 21 listopada 2008 r. o służbie cywilnej - przepisy o ocenach okresowych
 
-Źródło: Dz.U. z 2026 r. poz. 590 t.j. (wyciąg: art. 81-83, art. 89; materiały KPRM do wyzwania HackNation 2026)
+Źródło: Dz.U. z 2026 r. poz. 590 t.j. (wyciąg: art. 37-38, 52, 71, 81-84, 89, 108-109; tekst jednolity z ISAP, stan na 2026-05-12; materiały KPRM do wyzwania HackNation 2026)
+
+## art. 37 ustawy o służbie cywilnej (pierwsza ocena w służbie cywilnej - kogo dotyczy)
+1. Osoba zatrudniona na podstawie umowy o pracę, o której mowa w art. 35 ust. 3, podlega pierwszej ocenie w służbie cywilnej. 2. Pierwszej ocenie w służbie cywilnej, na zasadach określonych w art. 38, może podlegać osoba zatrudniona w celu zastępstwa nieobecnego członka korpusu służby cywilnej. 3. Pierwszej ocenie w służbie cywilnej nie podlega absolwent Krajowej Szkoły Administracji Publicznej im. Prezydenta Rzeczypospolitej Polskiej Lecha Kaczyńskiego, który złożył wniosek o mianowanie w służbie cywilnej.
+
+## art. 38 ustawy o służbie cywilnej (pierwsza ocena w służbie cywilnej - termin i tryb; odrębna od oceny okresowej)
+1. Pierwsza ocena w służbie cywilnej jest dokonywana nie wcześniej niż po upływie 8 miesięcy od nawiązania stosunku pracy i nie później niż miesiąc przed upływem okresu, na który została zawarta umowa o pracę ocenianego. 2. Bezpośredni przełożony ocenianego w porozumieniu z kierującym komórką organizacyjną, w której pracownik jest zatrudniony, dokonuje pierwszej oceny w służbie cywilnej, biorąc pod uwagę: 1) postawę pracownika, jego zaangażowanie i postępy w pracy, relacje ze współpracownikami oraz terminowość wykonywania zadań; 2) wynik egzaminu ze służby przygotowawczej; 3) sporządzone przez ocenianego pracownika sprawozdanie dotyczące zadań realizowanych przez niego w trakcie przepracowanego okresu. 3. Po dokonaniu oceny kierujący komórką organizacyjną wnioskuje do dyrektora generalnego urzędu w przypadku: 1) przyznania oceny pozytywnej - o zawarcie z ocenionym umowy o pracę na czas nieokreślony albo 2) przyznania oceny negatywnej - o niezawieranie z ocenionym umowy o pracę na czas nieokreślony albo o rozwiązanie umowy o pracę na czas określony.
+
+## art. 52 ustawy o służbie cywilnej (wyższe stanowiska w służbie cywilnej)
+Wyższymi stanowiskami w służbie cywilnej są stanowiska: 1) dyrektora generalnego urzędu; 2) kierującego departamentem lub komórką równorzędną w Kancelarii Prezesa Rady Ministrów, urzędzie ministra, urzędzie obsługującym przewodniczącego komitetu wchodzącego w skład Rady Ministrów, urzędzie centralnego organu administracji rządowej oraz kierującego wydziałem lub komórką równorzędną w urzędzie wojewódzkim, a także zastępcy tych osób; 3) wojewódzkiego lekarza weterynarii i jego zastępcy; 3a) powiatowego lekarza weterynarii i jego zastępcy; 3b) wojewódzkiego inspektora jakości handlowej artykułów rolno-spożywczych i jego zastępcy; 4) kierującego komórką organizacyjną w Biurze Nasiennictwa Leśnego, a także zastępcy tej osoby; 5) dyrektora Krajowej Informacji Skarbowej, dyrektora izby administracji skarbowej, naczelnika urzędu skarbowego, naczelnika urzędu celno-skarbowego, a także zastępcy tych osób.
+
+## art. 71 ust. 1 pkt 1 ustawy o służbie cywilnej (dwukrotna negatywna ocena okresowa - rozwiązanie stosunku pracy z urzędnikiem)
+1. Rozwiązanie stosunku pracy z urzędnikiem służby cywilnej następuje, z zachowaniem trzymiesięcznego okresu wypowiedzenia, w razie: 1) dwukrotnej, następującej po sobie, negatywnej oceny, o której mowa w art. 81 ust. 1.
+
+## art. 84 ustawy o służbie cywilnej (opis i wartościowanie stanowisk pracy)
+1. Stanowiska pracy w korpusie służby cywilnej podlegają opisowi i wartościowaniu. 2. Prezes Rady Ministrów określi, w drodze zarządzenia, zasady dokonywania opisów i wartościowania stanowisk pracy.
 
 ## art. 81 ust. 1-3 ustawy o służbie cywilnej (kto podlega ocenie, kto ocenia, forma pisemna)
 1. Urzędnik służby cywilnej oraz pracownik służby cywilnej zatrudniony na podstawie umowy o pracę na czas nieokreślony podlega ocenie okresowej dokonywanej przez bezpośredniego przełożonego.
@@ -38,6 +53,15 @@ Prezes Rady Ministrów określi, w drodze rozporządzenia, warunki i sposób prz
 
 ## art. 89 ust. 2 ustawy o służbie cywilnej (obligatoryjny kolejny stopień po dwóch ocenach na najwyższych poziomach)
 2. Urzędnik służby cywilnej, który od otrzymania ostatniego stopnia służbowego uzyskał dwie kolejne następujące po sobie pozytywne oceny okresowe na jednym z dwóch najwyższych poziomów przewidzianych w skali ocen, otrzymuje kolejny stopień służbowy w terminie 30 dni od dnia zapoznania urzędnika służby cywilnej z oceną okresową.
+
+## art. 108 ustawy o służbie cywilnej (indywidualny program rozwoju zawodowego - kto ustala, akceptuje, zatwierdza)
+1. Bezpośredni przełożony ustala, odrębnie dla każdego członka korpusu służby cywilnej, z wyjątkiem osób zajmujących wyższe stanowiska w służbie cywilnej, indywidualny program rozwoju zawodowego, stanowiący podstawę do kierowania członka korpusu służby cywilnej na szkolenia, biorąc pod uwagę w szczególności: 1) wnioski zawarte w ocenie okresowej członka korpusu służby cywilnej; 2) planowaną ścieżkę awansu stanowiskowego i finansowego członka korpusu służby cywilnej; 3) plany i możliwości rozwoju zawodowego członka korpusu służby cywilnej; 4) potrzeby i możliwości urzędu w zakresie zatrudnienia.
+2. Program, o którym mowa w ust. 1, jest akceptowany przez osobę kierującą komórką organizacyjną i zatwierdzany przez dyrektora generalnego urzędu.
+3. Prezes Rady Ministrów może określić, w drodze zarządzenia, szczegółowy sposób ustalania indywidualnego programu rozwoju zawodowego członka korpusu służby cywilnej.
+
+## art. 109 ust. 1-2 ustawy o służbie cywilnej (szkolenia w ramach obowiązków, bez opłat)
+1. Uczestnictwo członka korpusu służby cywilnej w szkoleniach przewidzianych dla służby cywilnej jest traktowane na równi z wykonywaniem przez niego obowiązków służbowych.
+2. Członek korpusu służby cywilnej nie ponosi opłat z tytułu uczestnictwa w szkoleniach przewidzianych dla służby cywilnej.
 
 ## Zasady obliczania terminów w procesie oceny (materiał KPRM)
 Terminy określone w miesiącach kończą się z upływem dnia w ostatnim miesiącu, który odpowiada początkowemu dniowi terminu, a gdyby takiego dnia nie było - w ostatnim dniu tego miesiąca. Jeżeli koniec terminu wypada w dzień wolny od pracy lub w sobotę, termin upływa następnego dnia roboczego. Przy terminie w dniach nie uwzględnia się dnia, w którym nastąpiło zdarzenie. Nieobecności usprawiedliwione (zwolnienie lekarskie, urlop wypoczynkowy, urlopy związane z rodzicielstwem) następujące po sobie liczy się łącznie; dni wolne od pracy między nimi nie przerywają ciągłości nieobecności.

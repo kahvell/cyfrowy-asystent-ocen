@@ -30,7 +30,9 @@ def _notes(session: Session, employee_id: int) -> list[Note]:
 
 def employee_signals(session: Session, employee_id: int, today: date | None = None) -> dict:
     notes = [NoteIn(n.id, n.date, n.text, n.sentiment, n.source) for n in _notes(session, employee_id)]
-    return analyze(notes, absences(session, employee_id), today or date.today())
+    emp = session.get(Employee, employee_id)
+    return analyze(notes, absences(session, employee_id), today or date.today(),
+                   emp.employment_start if emp else None)
 
 
 @router.get("/employees/{employee_id}/hr-partner")

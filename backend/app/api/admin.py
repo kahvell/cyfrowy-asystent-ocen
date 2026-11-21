@@ -6,7 +6,7 @@ ani szkiców ocen (to robocze materiały przełożonego).
 """
 
 import secrets
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -19,6 +19,7 @@ from app.security import get_current_user, hash_password, require_roles
 from app.services import deadlines as dl
 from app.services.audit import audit
 from app.services.notify import notify, notify_employee
+from app.services.process import deadline_base, previous_review
 
 router = APIRouter(tags=["kadry"])
 hr_only = require_roles("hr", "admin")
@@ -38,7 +39,7 @@ def _emp_out(session: Session, e: Employee, depts: dict[int, Department], people
         "employment_end": e.employment_end.isoformat() if e.employment_end else None,
         "appointment_year": e.appointment_year, "civil_grade": e.civil_grade,
         "civil_grade_date": e.civil_grade_date.isoformat() if e.civil_grade_date else None,
-        "position_description": e.position_description, "active": e.active,
+        "position_description": e.position_description, "active": e.active, "senior_position": e.senior_position,
         "email": user.email if user else None, "role": user.role if user else None,
         "review": {"id": current.id, "status": current.status,
                    "due_date": current.due_date.isoformat() if current.due_date else None} if current else None,
@@ -85,6 +86,7 @@ class EmployeeIn(BaseModel):
     civil_grade: int | None = Field(default=None, ge=1, le=9)
     civil_grade_date: date | None = None
     position_description: str = ""
+    senior_position: bool = False  # wyższe stanowisko w służbie cywilnej (art. 52) - bez IPR
     email: str | None = None  # utworzenie konta w systemie
 
 
@@ -100,7 +102,10 @@ class EmployeePatch(BaseModel):
     civil_grade: int | None = Field(default=None, ge=1, le=9)
     civil_grade_date: date | None = None
     position_description: str | None = None
+    senior_position: bool | None = None
     reason: str = ""  # np. „zmiana struktury”, „powierzenie innego stanowiska”
+    # zmiana stanowiska wiążąca się z istotną zmianą zakresu obowiązków (art. 81 ust. 6, § 9 rozporządzenia)
+    significant_change_date: date | None = None
 
 
 @router.post("/admin/employees", status_code=201)
@@ -148,7 +153,7 @@ def update_employee(employee_id: int, body: EmployeePatch, user: User = Depends(
     e = session.get(Employee, employee_id)
     if e is None:
         raise HTTPException(404, "Nie ma takiego pracownika")
-    changes = body.model_dump(exclude_unset=True, exclude={"reason"})
+    changes = body.model_dump(exclude_unset=True, exclude={"reason", "significant_change_date"})
     if changes.get("manager_id") == e.id:
         raise HTTPException(422, "Pracownik nie może być swoim przełożonym")
     old_manager = e.manager_id
@@ -176,15 +181,58 @@ def update_employee(employee_id: int, body: EmployeePatch, user: User = Depends(
                    "Zostałeś(-aś) bezpośrednim przełożonym ocenianego. Sprawdź etap oceny i termin - "
                    "w razie potrzeby możesz go zmienić (art. 81 ust. 8 pkt 1).", f"/reviews/{r.id}")
             notify_employee(session, r, "Zmiana oceniającego", f"Twoim oceniającym jest teraz {new_reviewer.full_name}.")
-    audit(session, user, "update", "employee", e.id, fields=sorted(changes), reason=body.reason, reviews_moved=moved)
+    position_effects = position_change(session, e, body.significant_change_date) if body.significant_change_date else []
+    audit(session, user, "update", "employee", e.id, fields=sorted(changes), reason=body.reason, reviews_moved=moved,
+          position_change=position_effects)
     session.commit()
     depts = {d.id: d for d in session.exec(select(Department)).all()}
     people = {x.id: x for x in session.exec(select(Employee)).all()}
-    return {**_emp_out(session, e, depts, people), "reviews_moved": moved}
+    return {**_emp_out(session, e, depts, people), "reviews_moved": moved, "position_change": position_effects}
+
+
+def position_change(session: Session, e: Employee, changed: date) -> list[dict]:
+    """Zmiana stanowiska z istotną zmianą zakresu obowiązków:
+    - w ciągu 6 mies. od ustalenia kryteriów (pierwsza ocena) albo od ostatniej oceny: ponownie rozmowa
+      i kryteria (§ 5-6) w 30 dni od zmiany, termin oceny bez zmian (§ 9 ust. 1 rozporządzenia),
+    - później: ocena sporządzana w związku ze zmianą stanowiska (art. 81 ust. 6) - nie wcześniej niż 7 dni
+      przed i nie później niż 30 dni po zmianie (§ 9 ust. 2)."""
+    effects = []
+    for r in session.exec(select(Review).where(Review.employee_id == e.id, Review.status.in_(ACTIVE))).all():
+        prev = previous_review(session, r)
+        ref = (prev.reviewer_signed_at if prev and prev.reviewer_signed_at else None) or \
+            r.criteria_reviewer_confirmed_at or deadline_base(session, r)
+        if changed <= dl.add_months(ref, 6):
+            r.status = "criteria"
+            r.criteria_reviewer_confirmed_at = r.criteria_employee_confirmed_at = None
+            r.criteria_deadline = dl.days_deadline(changed, 30)
+            note = ("zmiana stanowiska w ciągu 6 mies. - ponownie rozmowa i kryteria w 30 dni, "
+                    "termin oceny bez zmian (§ 9 ust. 1 rozporządzenia)")
+            effects.append({"review_id": r.id, "effect": "criteria_reopened", "criteria_deadline": r.criteria_deadline.isoformat()})
+            notify(session, r.reviewer_id, f"Zmiana stanowiska: ponownie wyznacz kryteria - {e.full_name}",
+                   f"Rozmowa i kryteria do {r.criteria_deadline.isoformat()} (§ 9 ust. 1).", f"/reviews/{r.id}")
+        else:
+            new = dl.days_deadline(changed, 30)
+            note = (f"zmiana stanowiska - ocena w związku z istotną zmianą zakresu obowiązków (art. 81 ust. 6): "
+                    f"od {(changed - timedelta(days=7)).isoformat()} do {new.isoformat()} (§ 9 ust. 2)")
+            r.due_date_history = [*r.due_date_history, {"from": r.due_date.isoformat() if r.due_date else None,
+                                                        "date": new.isoformat(), "reason": note, "at": date.today().isoformat()}]
+            r.due_date = new
+            effects.append({"review_id": r.id, "effect": "review_due", "due_date": new.isoformat()})
+            notify(session, r.reviewer_id, f"Zmiana stanowiska: sporządź ocenę - {e.full_name}",
+                   f"Ocena najpóźniej {new.isoformat()} (art. 81 ust. 6, § 9 ust. 2).", f"/reviews/{r.id}")
+        if effects and effects[-1]["effect"] == "criteria_reopened":
+            r.due_date_history = [*r.due_date_history, {"from": r.due_date.isoformat() if r.due_date else None,
+                                                        "date": r.due_date.isoformat() if r.due_date else None,
+                                                        "reason": note, "at": date.today().isoformat()}]
+        notify_employee(session, r, "Zmiana stanowiska a ocena okresowa", note)
+        session.add(r)
+    return effects
 
 
 class TerminateIn(BaseModel):
     employment_end: date
+    # Standardy ZZL VII pkt 3: na wniosek pracownika, z którym rozwiązano stosunek pracy, przełożony sporządza ocenę
+    review_requested: bool = False
 
 
 @router.post("/admin/employees/{employee_id}/terminate")
@@ -197,6 +245,16 @@ def terminate(employee_id: int, body: TerminateIn, user: User = Depends(hr_only)
         raise HTTPException(404, "Nie ma takiego pracownika")
     if session.exec(select(Employee).where(Employee.manager_id == e.id, Employee.active)).first():
         raise HTTPException(409, "Najpierw przypisz podwładnym nowego przełożonego")
+    if body.review_requested and e.manager_id:
+        mgr = _manager_user(session, e.manager_id)
+        if mgr:
+            notify(session, mgr.id, f"Wniosek o ocenę okresową odchodzącego pracownika: {e.full_name}",
+                   "Standardy ZZL (rozdz. VII pkt 3): na wniosek pracownika, z którym rozwiązano stosunek pracy, "
+                   "przełożony przeprowadza ocenę okresową. Sporządź ją przed datą ustania zatrudnienia - "
+                   "dziennik obserwacji zostanie usunięty po zakończeniu zatrudnienia.", f"/employees/{e.id}")
+        audit(session, user, "review_requested_on_exit", "employee", e.id)
+        session.commit()
+        return {"id": e.id, "active": True, "notes_deleted": 0, "review_requested": True}
     deleted = _delete_notes(session, e.id)
     e.active, e.employment_end = False, body.employment_end
     session.add(e)
@@ -257,7 +315,7 @@ def recompute_due_dates(session: Session, employee_id: int) -> list[dict]:
                      for h in r.due_date_history)
         if manual:
             continue
-        new = dl.review_due_date(r.period_start, periods)
+        new = dl.review_due_date(deadline_base(session, r), periods)
         if new != r.due_date:
             r.due_date_history = [*r.due_date_history, {
                 "from": r.due_date.isoformat() if r.due_date else None, "date": new.isoformat(),

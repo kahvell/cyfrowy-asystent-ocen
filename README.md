@@ -39,6 +39,14 @@ To jest liczone w kodzie, nie przez LLM, i pokryte testami (`backend/tests/test_
 
 Kryteria są danymi, a nie kodem (`backend/seed/criteria.json`), a terminy (24 miesiące, 7 dni itd.) są w jednym słowniku `RULES`. Zmiana przepisów (np. częstotliwości ocen) to zmiana konfiguracji, a nie przebudowa systemu.
 
+### Podstawy prawne i zakres
+
+Zweryfikowane z materiałami KPRM: **rozporządzenie PRM z 4.04.2016 (Dz.U. 2016 poz. 470)** w całości (§ 1–13, załącznik nr 1 porównany automatycznie słowo w słowo, objaśnienia wzorów arkuszy A, B, C), **ustawa o służbie cywilnej** (art. 37–38, 52, 71, 81–84, 89, 108–109) i **Standardy ZZL** (zarządzenie nr 6 Szefa Służby Cywilnej z 12.03.2020). Fragmenty przepisów w asystencie pochodzą dosłownie z tych aktów (`backend/seed/legal`).
+
+W systemie zaimplementowane m.in.: termin kryteriów 30/7 dni (§ 7), zmiana stanowiska (§ 9, art. 81 ust. 6), „okres od–do” wg objaśnień do arkusza, ostrzeżenie o drugiej z rzędu ocenie negatywnej urzędnika (art. 71 ust. 1 pkt 1), IPR: ustala przełożony → akceptuje kierujący komórką → zatwierdza dyrektor generalny (art. 108 ust. 2), brak IPR dla wyższych stanowisk (art. 52), informacja zwrotna bieżąca i cykliczna, wprowadzenie nowego pracownika, ocena na wniosek odchodzącego pracownika (Standardy ZZL).
+
+**Poza zakresem:** *pierwsza ocena w służbie cywilnej* (art. 37–38, pracownicy na umowie na czas określony) - odrębny tryb i wzór arkusza z innego rozporządzenia, którego nie ma w materiałach wyzwania; nabór, wynagrodzenia, nagrody i postępowanie dyscyplinarne.
+
 ## Uruchomienie
 
 ### Docker (jedna komenda)

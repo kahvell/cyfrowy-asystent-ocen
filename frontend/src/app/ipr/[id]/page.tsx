@@ -12,6 +12,13 @@ import { api } from "@/lib/api";
 import type { IPR, IPRGoal, Training } from "@/lib/types";
 import { fmtDate, modelLabel } from "@/lib/utils";
 
+const IPR_STATUS: Record<IPR["status"], string> = {
+  draft: "projekt",
+  established: "ustalony przez przełożonego",
+  accepted: "zaakceptowany - czeka na zatwierdzenie DG",
+  approved: "zatwierdzony przez dyrektora generalnego",
+};
+
 export default function IPRPage() {
   const { id } = useParams<{ id: string }>();
   const iprId = Number(id);
@@ -44,7 +51,7 @@ function IPRForm({ ipr }: { ipr: IPR }) {
             deadline: g.deadline,
             training_id: g.training?.id ?? null,
           })),
-          status: approve ? "approved" : undefined,
+          status: approve ? "established" : undefined,
         },
       }),
     onSuccess: (r) => {
@@ -53,7 +60,14 @@ function IPRForm({ ipr }: { ipr: IPR }) {
     },
   });
 
-  const editable = ipr.status === "draft" && me?.role !== "employee" && me?.employee_id !== ipr.employee.id;
+  const editable = ipr.can_edit ?? (ipr.status === "draft" && me?.role !== "employee" && me?.employee_id !== ipr.employee.id);
+  const step = useMutation({
+    mutationFn: (action: "accept" | "approve") => api<IPR>(`/ipr/${iprId}/${action}`, { method: "POST" }),
+    onSuccess: (r) => {
+      qc.setQueryData(["ipr", iprId], r);
+      qc.invalidateQueries({ queryKey: ["reminders"] });
+    },
+  });
   const upd = (i: number, patch: Partial<IPRGoal>) => setGoals((gs) => gs.map((g, j) => (j === i ? { ...g, ...patch } : g)));
 
   return (
@@ -67,12 +81,45 @@ function IPRForm({ ipr }: { ipr: IPR }) {
         subtitle={`${ipr.employee.full_name} · ${ipr.employee.position}`}
         action={
           <div className="flex items-center gap-2">
-            {ipr.status === "approved" ? <Badge tone="green">zatwierdzony {fmtDate(ipr.approved_at)}</Badge> : <Badge tone="amber">projekt</Badge>}
+            <Badge tone={ipr.status === "approved" ? "green" : ipr.status === "draft" ? "amber" : "blue"}>{IPR_STATUS[ipr.status]}</Badge>
             {ipr.ai && <AiLabel model={modelLabel(ipr.ai.model)} />}
           </div>
         }
       />
       <div className="space-y-4">
+        <Card className="p-5">
+          <h2 className="mb-3 text-sm font-semibold">Ścieżka programu (art. 108 ust. 1-2 ustawy o służbie cywilnej)</h2>
+          <ol className="grid gap-2 text-sm sm:grid-cols-3">
+            {(
+              [
+                ["Ustala bezpośredni przełożony", ipr.established_at, ["established", "accepted", "approved"]],
+                ["Akceptuje kierujący komórką organizacyjną", ipr.accepted_at, ["accepted", "approved"]],
+                ["Zatwierdza dyrektor generalny urzędu", ipr.approved_at, ["approved"]],
+              ] as const
+            ).map(([label, when, done], i) => (
+              <li key={label} className={`rounded-md border px-3 py-2 ${(done as readonly string[]).includes(ipr.status) ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-dashed border-border text-slate-500"}`}>
+                <div className="text-xs">krok {i + 1}</div>
+                <div className="font-medium">{label}</div>
+                {when && <div className="text-xs">{fmtDate(when)}</div>}
+              </li>
+            ))}
+          </ol>
+          {(ipr.can_accept || ipr.can_approve) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {ipr.can_accept && (
+                <Button onClick={() => step.mutate("accept")} loading={step.isPending}>
+                  <CheckCircle2 className="h-4 w-4" aria-hidden /> Akceptuję program
+                </Button>
+              )}
+              {ipr.can_approve && (
+                <Button onClick={() => step.mutate("approve")} loading={step.isPending}>
+                  <CheckCircle2 className="h-4 w-4" aria-hidden /> Zatwierdzam program
+                </Button>
+              )}
+            </div>
+          )}
+          <ErrorBox error={step.error} />
+        </Card>
         <Card className="p-5">
           <Label htmlFor="summary">Kierunki rozwoju zawodowego</Label>
           <Textarea id="summary" rows={3} readOnly={!editable} value={summary} onChange={(e) => setSummary(e.target.value)} />
@@ -161,7 +208,7 @@ function IPRForm({ ipr }: { ipr: IPR }) {
                 Zapisz projekt
               </Button>
               <Button onClick={() => save.mutate(true)} loading={save.isPending}>
-                <CheckCircle2 className="h-4 w-4" aria-hidden /> Zatwierdź IPR i wpisz wnioski do arkusza
+                <CheckCircle2 className="h-4 w-4" aria-hidden /> Ustal IPR i wpisz wnioski do arkusza
               </Button>
             </div>
           </>

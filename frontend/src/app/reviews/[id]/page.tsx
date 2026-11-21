@@ -185,6 +185,30 @@ function OverallJustification({ review, editable }: { review: Review; editable: 
   );
 }
 
+/** Wyższe stanowisko (art. 52): bez IPR, ale ocena nadal zawiera wnioski dotyczące rozwoju (art. 81 ust. 5). */
+function IprConclusions({ review, editable }: { review: Review; editable: boolean }) {
+  const qc = useQueryClient();
+  const [text, setText] = useState(review.ipr_conclusions);
+  const save = useMutation({
+    mutationFn: () => api<Review>(`/reviews/${review.id}`, { method: "PATCH", json: { ipr_conclusions: text } }),
+    onSuccess: (r) => qc.setQueryData(["review", review.id], r),
+  });
+  return (
+    <div>
+      <Textarea
+        rows={3}
+        value={text}
+        readOnly={!editable}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => text !== review.ipr_conclusions && save.mutate()}
+        placeholder="Kierunki rozwoju zawodowego, obszary do doskonalenia, formy i metody realizacji (wniosek wpisywany bezpośrednio w arkuszu)."
+        aria-label="Wnioski dotyczące rozwoju zawodowego"
+      />
+      <ErrorBox error={save.error} />
+    </div>
+  );
+}
+
 type Tab = "quality" | "evidence" | "compare" | "prep";
 
 export default function ReviewPage() {
@@ -337,7 +361,9 @@ export default function ReviewPage() {
                 <div>
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-sm font-medium">Wnioski dotyczące IPR (§ 11 ust. 1 pkt 5)</span>
-                    {review.ipr_id ? (
+                    {review.employee.senior_position ? (
+                      <Badge tone="slate" title="Art. 108 ust. 1 ustawy o służbie cywilnej">wyższe stanowisko: bez IPR (art. 108)</Badge>
+                    ) : review.ipr_id ? (
                       <Link href={`/ipr/${review.ipr_id}`} className="text-sm text-primary hover:underline">
                         otwórz IPR →
                       </Link>
@@ -347,9 +373,13 @@ export default function ReviewPage() {
                       </Button>
                     )}
                   </div>
-                  <p className="whitespace-pre-line rounded-md bg-slate-50 p-3 text-sm text-slate-700">
-                    {review.ipr_conclusions || "Pojawią się po zatwierdzeniu IPR."}
-                  </p>
+                  {review.employee.senior_position ? (
+                    <IprConclusions key={review.ipr_conclusions} review={review} editable={editable} />
+                  ) : (
+                    <p className="whitespace-pre-line rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                      {review.ipr_conclusions || "Pojawią się po ustaleniu IPR przez przełożonego (art. 108 ustawy)."}
+                    </p>
+                  )}
                   <AiWaiting active={genIpr.isPending} typical="60–120 s" />
                   <ErrorBox error={genIpr.error} />
                 </div>

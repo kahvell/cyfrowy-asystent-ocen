@@ -27,6 +27,7 @@ ACTIONS = {
         "Przegląd zadań: co można odłożyć, przekazać lub uprościć - zmiana priorytetów na najbliższe 4 tygodnie.",
         "Tymczasowe wsparcie zespołu lub podział obowiązków przejętych po innej osobie.",
         "Uzgodnij realne terminy i jasno komunikuj je odbiorcom.",
+        "Narzędzia work-life balance dostępne w urzędzie, np. ruchomy czas pracy, telepraca (Standardy ZZL, rozdz. V).",
     ],
     "disengagement": [
         "Rozmowa o motywacji: co daje satysfakcję, co przeszkadza - słuchaj, nie oceniaj.",
@@ -44,12 +45,22 @@ ACTIONS = {
         "Sprawdź, czy termin oceny został przesunięty o czas nieobecności (art. 81 ust. 7).",
     ],
     "feedback_gap": [
-        "Krótka rozmowa o bieżącej pracy i oczekiwaniach (standard informacji zwrotnej w służbie cywilnej).",
+        "Krótka rozmowa o bieżącej pracy i oczekiwaniach - Standardy ZZL przewidują informację zwrotną bieżącą "
+        "i cykliczną (np. kwartalną), konkretną i odnoszącą się do zachowań i faktów.",
         "Zapisz w dzienniku choć jedną obserwację - ocena nie powinna opierać się na pamięci.",
     ],
     "scope_change": [
         "Zaktualizuj opis stanowiska, jeśli zmiana zakresu jest trwała.",
-        "Przy istotnej zmianie zakresu obowiązków sprawdź, czy nie jest wymagana ocena (art. 81 ust. 6).",
+        "Przy istotnej zmianie zakresu obowiązków sprawdź, czy nie jest wymagana ocena (art. 81 ust. 6) "
+        "albo ponowne wyznaczenie kryteriów (§ 9 rozporządzenia).",
+        "Zadania dodatkowe lub zastępstwo nieobecnego pracownika mogą uzasadniać wniosek o dodatek zadaniowy "
+        "(Standardy ZZL, rozdz. IV pkt 3).",
+    ],
+    "onboarding": [
+        "Zapytaj nowego pracownika o przebieg wdrożenia, napotkane trudności, propozycje usprawnień, potrzeby "
+        "rozwojowe i zadowolenie z pracy (Standardy ZZL, rozdz. III pkt 5).",
+        "Upewnij się, że ma osobę, która pomaga mu wdrożyć się do pracy.",
+        "Pamiętaj o rozmowie rozpoczynającej ocenę i kryteriach w 30 dni od zatrudnienia (§ 7 rozporządzenia).",
     ],
 }
 
@@ -73,7 +84,7 @@ class Signal:
     actions: list[str] = field(default_factory=list)
 
 
-def analyze(notes: list[NoteIn], absences: list[Period], today: date) -> dict:
+def analyze(notes: list[NoteIn], absences: list[Period], today: date, employment_start: date | None = None) -> dict:
     recent_from = today - timedelta(days=RECENT_DAYS)
     recent = [n for n in notes if n.date >= recent_from]
     earlier = [n for n in notes if n.date < recent_from]
@@ -113,6 +124,12 @@ def analyze(notes: list[NoteIn], absences: list[Period], today: date) -> dict:
                               f"Nieobecność {p.days} dni (do {p.end.isoformat()}). Zaplanuj rozmowę po powrocie.",
                               [], ACTIONS["return"]))
 
+    if employment_start and 0 <= (today - employment_start).days <= RECENT_DAYS:
+        signals.append(Signal("onboarding", "info", "Nowy pracownik - wprowadzenie do pracy",
+                              f"Zatrudnienie od {employment_start.isoformat()}. Standardy ZZL zalecają, by przełożony "
+                              "zasięgał informacji od nowych pracowników o początkowym okresie pracy.",
+                              [], ACTIONS["onboarding"]))
+
     manager_notes = [n for n in notes if n.source == "manager"]
     last = max((n.date for n in manager_notes), default=None)
     if last is None or (today - last).days > RECENT_DAYS:
@@ -123,7 +140,9 @@ def analyze(notes: list[NoteIn], absences: list[Period], today: date) -> dict:
     # kultura doceniania: świeże sukcesy, które warto docenić
     praise = [n for n in notes if n.sentiment == "positive" and n.date >= today - timedelta(days=30)]
     appreciation = [{"note_id": n.id, "date": n.date.isoformat(), "text": n.text,
-                     "suggestion": "Doceń to wprost i konkretnie: co zrobił(a), jaki był efekt, dlaczego to ważne."}
+                     "suggestion": "Doceń to wprost i konkretnie: co zrobił(a), jaki był efekt, dlaczego to ważne. "
+                                   "Standardy ZZL zalecają niematerialne narzędzia motywacyjne: pochwałę, wyróżnienie, "
+                                   "powierzenie nowych, interesujących zadań."}
                     for n in sorted(praise, key=lambda n: n.date, reverse=True)[:3]]
     long_no_praise = not any(n.sentiment == "positive" for n in notes if n.date >= today - timedelta(days=120))
     if long_no_praise and notes:

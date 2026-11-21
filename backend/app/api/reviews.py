@@ -34,9 +34,11 @@ from app.services.process import (
     CRITERIA_FIELDS,
     EVALUATION_FIELDS,
     EVALUATION_STATUSES,
+    deadline_base,
     init_deadlines,
     office_of,
     prefill_previous,
+    second_negative_risk,
 )
 from app.services.reviews import (
     all_criteria,
@@ -344,7 +346,7 @@ def change_due_date(review_id: int, body: DueDateChange, user: User = Depends(ge
     review = get_review_for(session, user, review_id, manage=True)
     if review.status not in ("observation", "draft", "submitted"):
         raise HTTPException(409, "Termin można zmienić w okresie oceny, przed rozmową oceniającą")
-    if body.reason != "dluga_nieobecnosc" and not dl.can_change_due_date(review.period_start, date.today()):
+    if body.reason != "dluga_nieobecnosc" and not dl.can_change_due_date(deadline_base(session, review), date.today()):
         raise HTTPException(409, "Zmiana terminu jest możliwa, gdy od początku okresu oceny minęło ponad 6 miesięcy "
                                  "(art. 81 ust. 8)")
     review.due_date_history = [*review.due_date_history, {
@@ -387,7 +389,7 @@ def request_due_date(review_id: int, body: DueDateRequestIn, user: User = Depend
         raise HTTPException(403, "Wniosek składa oceniany")
     if review.status not in ("observation", "draft", "submitted"):
         raise HTTPException(409, "Wniosek można złożyć w okresie oceny, przed rozmową oceniającą")
-    if not dl.can_change_due_date(review.period_start, date.today()):
+    if not dl.can_change_due_date(deadline_base(session, review), date.today()):
         raise HTTPException(409, "Wniosek o zmianę terminu można złożyć po upływie 6 miesięcy od początku okresu oceny "
                                  "(art. 81 ust. 8)")
     if session.exec(select(DueDateRequest).where(DueDateRequest.review_id == review.id,
@@ -445,6 +447,8 @@ def start_evaluation(review_id: int, user: User = Depends(get_current_user), ses
     review = get_review_for(session, user, review_id, manage=True)
     if review.status == "observation":
         prefill_previous(session, review)
+        # „okres od” = data zapoznania ocenianego z kryteriami (objaśnienie 6 do wzoru arkusza)
+        review.period_start = review.criteria_employee_confirmed_at or review.period_start
         emp = session.get(Employee, review.employee_id)
         if emp and emp.is_civil_servant:
             review.appointment_year = review.appointment_year or emp.appointment_year
@@ -517,12 +521,18 @@ def finalize(review_id: int, body: PlaceIn | None = None, user: User = Depends(g
         raise HTTPException(409, {"message": "Nie można zatwierdzić oceny", "warnings": warnings})
     review.finalized_at = utcnow()
     review.reviewer_signed_at = date.today()
+    # „okres do” = data sporządzenia oceny na piśmie (objaśnienie 7 do wzoru arkusza)
+    review.period_end = review.reviewer_signed_at
     if body and body.place:
         review.reviewer_place = body.place
     elif not review.reviewer_place:
         emp = session.get(Employee, review.employee_id)
         office = office_of(session, emp) if emp else None
         review.reviewer_place = office.city if office else ""
+    if second_negative_risk(session, review):
+        emp = session.get(Employee, review.employee_id)
+        notify_hr(session, f"Druga z rzędu ocena negatywna urzędnika: {emp.full_name if emp else ''}",
+                  "Art. 71 ust. 1 pkt 1 ustawy o służbie cywilnej - rozwiązanie stosunku pracy.", f"/reviews/{review.id}")
     notify_employee(session, review, "Ocena okresowa do zapoznania",
                     "Zapoznaj się z oceną i potwierdź to w systemie. Od oceny przysługuje sprzeciw w terminie 7 dni "
                     "od dnia zapoznania się z nią (art. 83 ust. 1 ustawy o służbie cywilnej).")

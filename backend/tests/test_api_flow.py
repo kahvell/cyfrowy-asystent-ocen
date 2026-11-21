@@ -70,7 +70,7 @@ def test_quality_check_catches_problems_in_piotr_review(client, manager):
     assert {"recency", "halo", "vague", "biased_language"} <= codes
 
 
-def test_full_cycle_with_self_assessment_and_ipr(client, manager, employee):
+def test_full_cycle_with_self_assessment_and_ipr(client, manager, employee, hr):
     review_id = _team(client, manager)["Anna Kowalska"]["current_review"]["id"]
     review = client.get(f"/reviews/{review_id}", headers=manager).json()
     # pracownik nie widzi szkicu ocen przełożonego
@@ -104,10 +104,19 @@ def test_full_cycle_with_self_assessment_and_ipr(client, manager, employee):
     ipr = client.post(f"/reviews/{review_id}/ipr/generate", headers=manager).json()
     assert ipr["goals"]
     assert any(g["criterion_name"] == "Komunikacja" for g in ipr["goals"])
-    assert client.get(f"/ipr/{ipr['id']}", headers=employee).status_code == 403  # przed zatwierdzeniem
-    ok = client.patch(f"/ipr/{ipr['id']}", headers=manager, json={"status": "approved"}).json()
-    assert ok["status"] == "approved"
+    assert client.get(f"/ipr/{ipr['id']}", headers=employee).status_code == 403  # przed ustaleniem
+    ok = client.patch(f"/ipr/{ipr['id']}", headers=manager, json={"status": "established"}).json()
+    # art. 108 ust. 2: przełożony (naczelnik) jest kierującym komórką -> ustalenie + akceptacja
+    assert ok["status"] == "accepted"
     assert client.get(f"/ipr/{ipr['id']}", headers=employee).status_code == 200
+    # ustalonego programu nie edytuje się
+    assert client.patch(f"/ipr/{ipr['id']}", headers=manager, json={"summary": "x"}).status_code == 409
+
+    # zatwierdzenie przez dyrektora generalnego (rola hr), nie przez przełożonego
+    assert client.post(f"/ipr/{ipr['id']}/approve", headers=manager).status_code == 403
+    assert any(i["id"] == ipr["id"] for i in client.get("/ipr", headers=hr).json())
+    appr = client.post(f"/ipr/{ipr['id']}/approve", headers=hr)
+    assert appr.status_code == 200 and appr.json()["status"] == "approved"
 
     final = client.post(f"/reviews/{review_id}/finalize", headers=manager)
     assert final.status_code == 200, final.text

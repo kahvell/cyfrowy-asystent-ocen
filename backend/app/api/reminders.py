@@ -10,11 +10,11 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from app.db import get_session
-from app.models import Employee, Review, ReviewCycle, SelfAssessment, User
+from app.models import IPR, Employee, IPRGoal, Review, ReviewCycle, SelfAssessment, User
 from app.security import get_current_user
 from app.services import deadlines as dl
 from app.services.access import direct_report_ids
-from app.services.process import obligatory_promotion
+from app.services.process import obligatory_promotion, second_negative_risk
 
 router = APIRouter(tags=["reminders"])
 
@@ -42,15 +42,20 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
             link = f"/reviews/{r.id}"
             if r.status == "criteria" and not r.criteria_reviewer_confirmed_at:
                 out.append(_item("criteria_deadline", f"Wyznacz kryteria: {e.full_name}",
-                                 "Wybór kryteriów dodatkowych i rozmowa rozpoczynająca ocenę (§ 5).",
+                                 "Wybierz kryteria dodatkowe (maks. 3), przeprowadź rozmowę rozpoczynającą i potwierdź "
+                                 "w części I arkusza - 30 dni od zatrudnienia lub poprzedniej oceny (§ 5-7 rozporządzenia).",
                                  r.criteria_deadline, link, today))
             elif r.status == "criteria":
                 out.append(_item("employee_confirm_criteria", f"Czeka na potwierdzenie: {e.full_name}",
                                  "Oceniany nie potwierdził jeszcze zapoznania z kryteriami.", None, link, today, "info"))
             elif r.status in ("observation", "draft", "submitted", "discussed") and r.due_date \
                     and (r.due_date - today).days <= soon:
+                stage = {"observation": "okres oceny - rozpocznij przygotowanie oceny",
+                         "draft": "przygotowanie oceny - uzupełnij oceny cząstkowe i uzasadnienia",
+                         "submitted": "gotowa do rozmowy - przeprowadź rozmowę oceniającą (§ 10)",
+                         "discussed": "po rozmowie - sporządź ocenę na piśmie i wnioski do IPR (§ 11)"}[r.status]
                 out.append(_item("review_due", f"Zbliża się termin oceny: {e.full_name}",
-                                 "Przygotuj ocenę i umów rozmowę oceniającą (§ 10).", r.due_date, link, today))
+                                 f"Etap: {stage}. Ocena co 24 miesiące (art. 81 ust. 4 ustawy).", r.due_date, link, today))
             elif r.status == "final":
                 waited = (today - r.reviewer_signed_at).days if r.reviewer_signed_at else 0
                 out.append(_item("awaiting_ack", f"Oczekuje na zapoznanie: {e.full_name}",
@@ -61,6 +66,17 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
                 out.append(_item("repeat_review", f"Ponowna ocena po ocenie negatywnej: {e.full_name}",
                                  "Oceniany podlega ponownej ocenie po 6 miesiącach (art. 81 ust. 9).",
                                  dl.repeat_review_date(r.acknowledged_at), link, today))
+        # cele IPR z bliskim lub minionym terminem - przełożony monitoruje rozwój (Standardy ZZL VI pkt 3 ust. 5)
+        if team_ids:
+            goals = session.exec(select(IPRGoal, IPR, Employee).join(IPR, IPR.id == IPRGoal.ipr_id)
+                                 .join(Employee, Employee.id == IPR.employee_id)
+                                 .where(IPR.employee_id.in_(team_ids), IPR.status != "draft",
+                                        IPRGoal.deadline.is_not(None))).all()
+            for g, ipr, e in goals:
+                if (g.deadline - today).days <= 30:
+                    out.append(_item("ipr_goal", f"Cel IPR do sprawdzenia: {e.full_name}",
+                                     f"„{g.goal[:90]}” - porozmawiaj o postępach (monitorowanie rozwoju, Standardy ZZL).",
+                                     g.deadline, f"/ipr/{ipr.id}", today))
         # pracownicy bez arkusza w otwartym cyklu
         if team_ids:
             open_cycle = session.exec(select(ReviewCycle).where(ReviewCycle.status == "open")).first()
@@ -99,11 +115,22 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
                 out.append(_item("objection", f"Sprzeciw do rozpatrzenia: {e.full_name}",
                                  "Rozpatrzenie w 14 dni od wniesienia (art. 83 ust. 3).",
                                  dl.days_deadline(r.objection_at, dl.RULES["objection_decision_days"]), link, today))
+            elif r.acknowledged_at and second_negative_risk(session, r):
+                out.append(_item("termination", f"Druga z rzędu ocena negatywna: {e.full_name}",
+                                 "Urzędnik służby cywilnej - rozwiązanie stosunku pracy z 3-miesięcznym wypowiedzeniem "
+                                 "(art. 71 ust. 1 pkt 1 ustawy).", None, link, today, "critical"))
             elif r.acknowledged_at and today <= dl.promotion_deadline(r.acknowledged_at) \
                     and obligatory_promotion(session, r):
                 out.append(_item("obligatory_promotion", f"Obligatoryjny kolejny stopień służbowy: {e.full_name}",
                                  "Dwie kolejne oceny na jednym z dwóch najwyższych poziomów (art. 89 ust. 2).",
                                  dl.promotion_deadline(r.acknowledged_at), link, today))
+
+    if user.role in ("hr", "admin"):
+        for ipr, e in session.exec(select(IPR, Employee).join(Employee, Employee.id == IPR.employee_id)
+                                   .where(IPR.status == "accepted")).all():
+            out.append(_item("ipr_approval", f"IPR do zatwierdzenia: {e.full_name}",
+                             "Zaakceptowany przez kierującego komórką - zatwierdza dyrektor generalny (art. 108 ust. 2).",
+                             None, f"/ipr/{ipr.id}", today, "warning"))
 
     order = {"critical": 0, "warning": 1, "info": 2}
     return sorted(out, key=lambda x: (order[x["severity"]], x["due"] or "9999"))

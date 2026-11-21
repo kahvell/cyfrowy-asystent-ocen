@@ -103,7 +103,7 @@ export interface Review {
   period_start: string;
   period_end: string;
   conversation_date: string | null;
-  employee: { id: number; full_name: string; position: string; position_description: string; is_civil_servant: boolean };
+  employee: { id: number; full_name: string; position: string; position_description: string; is_civil_servant: boolean; senior_position?: boolean };
   reviewer: { id: number; full_name: string };
   criteria: ReviewCriterion[];
   summary: { average: number; level: string; result: string | null; complete: boolean } | null;
@@ -153,6 +153,7 @@ export interface Review {
     repeat_review_date: string | null;
     obligatory_promotion: boolean;
     promotion_deadline: string | null;
+    termination_risk?: boolean;
   };
 }
 
@@ -249,7 +250,12 @@ export interface IPRGoal {
 export interface IPR {
   id: number;
   review_id: number;
-  status: "draft" | "approved";
+  status: "draft" | "established" | "accepted" | "approved";
+  established_at: string | null;
+  accepted_at: string | null;
+  can_edit?: boolean;
+  can_accept?: boolean;
+  can_approve?: boolean;
   summary: string;
   employee: { id: number; full_name: string; position: string };
   approved_at: string | null;

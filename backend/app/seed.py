@@ -81,8 +81,10 @@ def seed_demo(session: Session) -> None:
         session.add(dept)
         session.flush()
         hname, hgender, hpos = dept_def["head"]
+        # kierujący wydziałem w urzędzie wojewódzkim - wyższe stanowisko w służbie cywilnej (art. 52 pkt 2)
         head = Employee(full_name=hname, gender=hgender, position=hpos, department_id=dept.id, sheet_type="B",
-                        is_civil_servant=True, position_description=f"Kierowanie komórką: {dept.name}.")
+                        is_civil_servant=True, senior_position=True,
+                        position_description=f"Kierowanie komórką: {dept.name}.")
         session.add(head)
         session.flush()
         muser = User(email=dept_def["email"], full_name=hname, password_hash=pw, role="manager", employee_id=head.id)
@@ -182,6 +184,7 @@ def seed_demo(session: Session) -> None:
             r.criteria_reviewer_confirmed_at, r.criteria_employee_confirmed_at = date(2024, 12, 10), date(2024, 12, 11)
             r.criteria_employee_place = D.OFFICE_CITY
         if status in ("draft", "submitted", "discussed"):
+            r.period_start = r.criteria_employee_confirmed_at  # „okres od” (objaśnienie 6 do arkusza)
             prefill_previous(session, r)
             if e.is_civil_servant:
                 r.appointment_year, r.civil_grade = e.appointment_year, e.civil_grade

@@ -78,6 +78,40 @@ def obligatory_promotion(session: Session, review: Review) -> bool:
     return prev_result == "pozytywna" and prev_level in TOP_LEVELS
 
 
+def second_negative_risk(session: Session, review: Review) -> bool:
+    """Art. 71 ust. 1 pkt 1 ustawy: dwukrotna, następująca po sobie negatywna ocena okresowa urzędnika
+    służby cywilnej skutkuje rozwiązaniem stosunku pracy (z 3-miesięcznym wypowiedzeniem)."""
+    emp = session.get(Employee, review.employee_id)
+    if not emp or not emp.is_civil_servant or review.result != "negatywna":
+        return False
+    prev = previous_review(session, review)
+    prev_result = prev.result if prev is not None else review.prev_result
+    return prev_result == "negatywna"
+
+
+SECOND_NEGATIVE_WARNING = {
+    "code": "second_negative", "severity": "warning", "criterion_id": None, "source": "rule", "evidence": [],
+    "title": "Druga z rzędu ocena negatywna urzędnika (art. 71 ust. 1 pkt 1 ustawy)",
+    "message": "Poprzednia ocena okresowa tego urzędnika służby cywilnej też była negatywna. Dwukrotna, następująca "
+               "po sobie negatywna ocena skutkuje rozwiązaniem stosunku pracy z 3-miesięcznym wypowiedzeniem.",
+    "suggestion": "Upewnij się, że uzasadnienie (§ 11 ust. 3) jest kompletne i oparte na faktach z całego okresu, "
+                  "i skonsultuj sprawę z komórką kadrową przed sporządzeniem oceny na piśmie.",
+}
+
+
+def deadline_base(session: Session, review: Review) -> date:
+    """Początek biegu 24 miesięcy: nawiązanie stosunku pracy / poprzednia ocena (początek cyklu).
+    Nie mylić z polem „okres od” w arkuszu, które jest datą zapoznania z kryteriami (objaśnienie 6 do arkusza)."""
+    from app.models import ReviewCycle
+
+    cycle = session.get(ReviewCycle, review.cycle_id)
+    emp = session.get(Employee, review.employee_id)
+    base = cycle.period_start if cycle else review.period_start
+    if emp and emp.employment_start and emp.employment_start > base:
+        base = emp.employment_start
+    return base
+
+
 def init_deadlines(session: Session, review: Review) -> None:
     prev = previous_review(session, review)
     review.criteria_deadline = dl.criteria_deadline(review.period_start, previous_negative=bool(
@@ -90,7 +124,7 @@ def review_deadlines(session: Session, review: Review, today: date | None = None
     out: dict = {
         "criteria_deadline": review.criteria_deadline.isoformat() if review.criteria_deadline else None,
         "due_date": review.due_date.isoformat() if review.due_date else None,
-        "can_change_due_date": dl.can_change_due_date(review.period_start, today),
+        "can_change_due_date": dl.can_change_due_date(deadline_base(session, review), today),
         "objection_deadline": None,
         "objection_open": False,
         "repeat_review_date": None,
@@ -108,6 +142,7 @@ def review_deadlines(session: Session, review: Review, today: date | None = None
             out["promotion_deadline"] = dl.promotion_deadline(review.acknowledged_at).isoformat()
     elif review.status == "final" and obligatory_promotion(session, review):
         out["obligatory_promotion"] = True
+    out["termination_risk"] = second_negative_risk(session, review)
     return out
 
 

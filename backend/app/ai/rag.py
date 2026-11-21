@@ -5,6 +5,7 @@
 Wektory trzymamy w kolumnie JSON (przenośne SQLite/Postgres); przy dużych zbiorach -> pgvector (ADR 0002).
 """
 
+import hashlib
 import logging
 import math
 import re
@@ -13,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from sqlmodel import Session, select
+from sqlmodel import Session, delete, select
 
 from app.ai.provider import LLMError, get_provider
 from app.models import DocChunk, LegalDoc
@@ -46,14 +47,24 @@ def chunk_markdown(text: str) -> list[tuple[str, str]]:
 
 
 def ingest_dir(session: Session, directory: Path) -> int:
+    """Indeksuje przepisy z katalogu. Nowy plik -> dodany; zmieniona treść -> stary dokument usunięty
+    i zaindeksowany ponownie; plik bez zmian -> pominięty. Aktualizacja przepisu = podmiana pliku .md."""
+    # dokumenty z wersji bez wersjonowania (brak file_name) indeksujemy od nowa
+    for old in session.exec(select(LegalDoc).where(LegalDoc.file_name.is_(None))).all():
+        _drop_doc(session, old)
     count = 0
     for path in sorted(directory.glob("*.md")):
         text = path.read_text(encoding="utf-8")
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        existing = session.exec(select(LegalDoc).where(LegalDoc.file_name == path.name)).first()
+        if existing and existing.content_hash == digest:
+            continue
+        if existing:
+            log.info("Zmieniona treść %s - ponowne indeksowanie", path.name)
+            _drop_doc(session, existing)
         title = text.splitlines()[0].lstrip("# ").strip()
-        if session.exec(select(LegalDoc).where(LegalDoc.title == title)).first():
-            continue  # dokument już zaindeksowany - nowe pliki dochodzą bez kasowania bazy
         source = next((ln[len("Źródło:"):].strip() for ln in text.splitlines() if ln.startswith("Źródło:")), path.name)
-        doc = LegalDoc(title=title, source=source)
+        doc = LegalDoc(title=title, source=source, file_name=path.name, content_hash=digest)
         session.add(doc)
         session.flush()
         chunks = chunk_markdown(text)
@@ -69,6 +80,12 @@ def ingest_dir(session: Session, directory: Path) -> int:
             count += 1
     session.commit()
     return count
+
+
+def _drop_doc(session: Session, doc: LegalDoc) -> None:
+    session.exec(delete(DocChunk).where(DocChunk.doc_id == doc.id))
+    session.delete(doc)
+    session.flush()
 
 
 def backfill_embeddings(session: Session) -> int:

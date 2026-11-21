@@ -21,7 +21,13 @@ from app.models import (
     User,
     utcnow,
 )
-from app.services.process import form_people, promotion_target, review_deadlines
+from app.services.process import (
+    SECOND_NEGATIVE_WARNING,
+    form_people,
+    promotion_target,
+    review_deadlines,
+    second_negative_risk,
+)
 from app.services.scoring import SCALE, compute_outcome
 
 
@@ -125,6 +131,7 @@ def serialize_review(session: Session, review: Review, *, viewer_is_reviewer: bo
         "employee": {
             "id": emp.id, "full_name": emp.full_name, "position": emp.position,
             "position_description": emp.position_description, "is_civil_servant": emp.is_civil_servant,
+            "senior_position": emp.senior_position,
         },
         "reviewer": {"id": reviewer.id, "full_name": reviewer.full_name},
         "criteria": [
@@ -198,7 +205,9 @@ def notes_for_criterion(session: Session, review: Review, criterion_id: int) -> 
 def rule_warnings(session: Session, review: Review, today: date | None = None) -> list[dict[str, Any]]:
     entries = review_entries(session, review)
     notes, tags = notes_for_review(session, review)
-    return run_rules(
+    recompute(session, review)
+    extra = [SECOND_NEGATIVE_WARNING] if second_negative_risk(session, review) else []
+    return extra + run_rules(
         [CriterionEntry(c.id, c.code, c.name, rc.score, rc.justification, rc.is_additional) for rc, c in entries],
         [NoteInfo(n.id, n.date, n.sentiment, {t.criterion_id for t in tags.get(n.id, [])}) for n in notes],
         period_start=review.period_start,

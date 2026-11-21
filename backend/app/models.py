@@ -45,6 +45,8 @@ class Employee(SQLModel, table=True):
     civil_grade: int | None = None       # posiadany stopień służbowy 1-9 (art. 89)
     civil_grade_date: date | None = None
     active: bool = True                   # False po ustaniu stosunku pracy (dane w archiwum akt)
+    # wyższe stanowisko w służbie cywilnej (art. 52 ustawy) - bez IPR (art. 108 ust. 1)
+    senior_position: bool = False
     employment_end: date | None = None
 
 
@@ -231,12 +233,17 @@ class IPR(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     review_id: int = Field(foreign_key="review.id", unique=True)
     employee_id: int = Field(foreign_key="employee.id")
-    status: str = "draft"  # draft | approved
+    # art. 108 ustawy: ustala bezpośredni przełożony -> akceptuje kierujący komórką -> zatwierdza dyrektor generalny
+    status: str = "draft"  # draft | established | accepted | approved
     summary: str = Field(default="", sa_type=Text)
     ai_suggestion_id: int | None = Field(default=None, foreign_key="aisuggestion.id")
     created_at: NaiveDatetime = Field(default_factory=utcnow)
     updated_at: NaiveDatetime = Field(default_factory=utcnow)
+    established_at: NaiveDatetime | None = None
+    accepted_at: NaiveDatetime | None = None
+    accepted_by: int | None = Field(default=None, foreign_key="user.id")
     approved_at: NaiveDatetime | None = None
+    approved_by: int | None = Field(default=None, foreign_key="user.id")
 
 
 class IPRGoal(SQLModel, table=True):
@@ -257,6 +264,8 @@ class LegalDoc(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     title: str
     source: str
+    file_name: str | None = None     # plik w seed/legal - aktualizacja przepisu = podmiana pliku
+    content_hash: str | None = None  # zmiana treści -> automatyczne ponowne zaindeksowanie
 
 
 class DocChunk(SQLModel, table=True):
