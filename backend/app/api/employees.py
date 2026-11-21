@@ -31,6 +31,8 @@ def _employee_out(session: Session, emp: Employee) -> dict:
         "position_description": emp.position_description,
         "sheet_type": emp.sheet_type,
         "is_civil_servant": emp.is_civil_servant,
+        "contract_type": emp.contract_type,
+        "senior_position": emp.senior_position,
     }
 
 
@@ -49,8 +51,6 @@ def list_employees(
     else:
         raise HTTPException(403, "HR ma dostęp wyłącznie do danych zagregowanych (dashboard)")
 
-    open_cycle = session.exec(select(ReviewCycle).where(ReviewCycle.status == "open")
-                              .order_by(ReviewCycle.period_start.desc())).first()
     out = []
     today = date.today()
     for emp in session.exec(select(Employee).where(Employee.id.in_(ids), Employee.active)
@@ -58,10 +58,13 @@ def list_employees(
         stats = session.exec(
             select(func.count(Note.id), func.max(Note.date)).where(Note.employee_id == emp.id)
         ).one()
-        review = None
-        if open_cycle:
-            review = session.exec(select(Review).where(Review.employee_id == emp.id,
-                                                       Review.cycle_id == open_cycle.id)).first()
+        # trwająca ocena, a jeśli brak - najnowsza (kolejne cykle zakładają się automatycznie)
+        mine = session.exec(select(Review).join(ReviewCycle, ReviewCycle.id == Review.cycle_id)
+                            .where(Review.employee_id == emp.id)
+                            .order_by(ReviewCycle.period_start.desc(), Review.id.desc())).all()
+        review = next((r for r in mine if r.status not in DONE), None)
+        if review is None and mine and mine[0].reviewer_signed_at and (today - mine[0].reviewer_signed_at).days <= 30:
+            review = mine[0]  # świeżo sporządzona ocena - widoczna jeszcze przez 30 dni
         last = stats[1]
         item = _employee_out(session, emp)
         item.update({

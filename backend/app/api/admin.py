@@ -14,12 +14,24 @@ from sqlmodel import Session, delete, select
 
 from app.analytics.stats import DONE
 from app.db import get_session
-from app.models import Absence, Department, Employee, Note, NoteCriterion, Notification, Review, User, utcnow
+from app.models import (
+    Absence,
+    Department,
+    Employee,
+    Note,
+    NoteCriterion,
+    Notification,
+    Review,
+    ReviewCriterion,
+    User,
+    utcnow,
+)
 from app.security import get_current_user, hash_password, require_roles
 from app.services import deadlines as dl
 from app.services.audit import audit
+from app.services.cycle import start_for_new_employee
 from app.services.notify import notify, notify_employee
-from app.services.process import deadline_base, previous_review
+from app.services.process import compute_due_date, deadline_base, previous_review
 
 router = APIRouter(tags=["kadry"])
 hr_only = require_roles("hr", "admin")
@@ -35,6 +47,7 @@ def _emp_out(session: Session, e: Employee, depts: dict[int, Department], people
         "department": depts[e.department_id].name if e.department_id in depts else "",
         "manager_id": e.manager_id, "manager_name": people[e.manager_id].full_name if e.manager_id in people else None,
         "sheet_type": e.sheet_type, "is_civil_servant": e.is_civil_servant, "gender": e.gender,
+        "contract_type": e.contract_type,
         "employment_start": e.employment_start.isoformat() if e.employment_start else None,
         "employment_end": e.employment_end.isoformat() if e.employment_end else None,
         "appointment_year": e.appointment_year, "civil_grade": e.civil_grade,
@@ -80,6 +93,7 @@ class EmployeeIn(BaseModel):
     manager_id: int | None = None
     sheet_type: str = Field(default="C", pattern="^[ABC]$")
     is_civil_servant: bool = False
+    contract_type: str = Field(default="nieokreslony", pattern="^(mianowanie|nieokreslony|okreslony)$")
     gender: str | None = Field(default=None, pattern="^[KM]$")
     employment_start: date | None = None
     appointment_year: int | None = None
@@ -97,6 +111,7 @@ class EmployeePatch(BaseModel):
     manager_id: int | None = None
     sheet_type: str | None = Field(default=None, pattern="^[ABC]$")
     is_civil_servant: bool | None = None
+    contract_type: str | None = Field(default=None, pattern="^(mianowanie|nieokreslony|okreslony)$")
     employment_start: date | None = None
     appointment_year: int | None = None
     civil_grade: int | None = Field(default=None, ge=1, le=9)
@@ -124,10 +139,13 @@ def create_employee(body: EmployeeIn, user: User = Depends(hr_only), session: Se
         session.add(User(email=body.email, full_name=e.full_name, password_hash=hash_password(password),
                          role="manager" if e.sheet_type in ("A", "B") else "employee", employee_id=e.id))
     audit(session, user, "create", "employee", e.id)
+    session.flush()
+    started = start_for_new_employee(session, e)  # schemat procesu: dane pracownika -> początek cyklu oceny
     session.commit()
     depts = {d.id: d for d in session.exec(select(Department)).all()}
     people = {x.id: x for x in session.exec(select(Employee)).all()}
-    return {**_emp_out(session, e, depts, people), "initial_password": password}
+    return {**_emp_out(session, e, depts, people), "initial_password": password,
+            "review_started": started.id if started else None}
 
 
 def _delete_notes(session: Session, employee_id: int) -> int:
@@ -178,8 +196,16 @@ def update_employee(employee_id: int, body: EmployeePatch, user: User = Depends(
             session.add(r)
             moved.append(r.id)
             notify(session, new_reviewer.id, f"Przejmujesz ocenę okresową: {e.full_name}",
-                   "Zostałeś(-aś) bezpośrednim przełożonym ocenianego. Sprawdź etap oceny i termin - "
-                   "w razie potrzeby możesz go zmienić (art. 81 ust. 8 pkt 1).", f"/reviews/{r.id}")
+                   "Od teraz pełnisz rolę bezpośredniego przełożonego ocenianego. Poradnik KPRM zaleca: przeprowadź "
+                   "z ocenianym rozmowę o obowiązkach, kryteriach i oczekiwaniach (w razie potrzeby wyznacz kryteria "
+                   "na nowo), poproś poprzedniego przełożonego o opinię o pracy ocenianego i sprawdź termin oceny - "
+                   "można go zmienić (art. 81 ust. 8 pkt 1).", f"/reviews/{r.id}")
+            old_user = _manager_user(session, old_manager) if old_manager else None
+            if old_user is not None:
+                notify(session, old_user.id, f"Zmiana oceniającego: {e.full_name}",
+                       f"Ocenę przejmuje {new_reviewer.full_name}. Jeżeli od początku okresu oceny minęło ponad "
+                       "6 miesięcy, ocenę możesz sporządzić jeszcze przed zmianą (art. 81 ust. 8 pkt 1); w przeciwnym "
+                       "razie przekaż nowemu przełożonemu opinię i notatki z obserwacji.", f"/reviews/{r.id}")
             notify_employee(session, r, "Zmiana oceniającego", f"Twoim oceniającym jest teraz {new_reviewer.full_name}.")
     position_effects = position_change(session, e, body.significant_change_date) if body.significant_change_date else []
     audit(session, user, "update", "employee", e.id, fields=sorted(changes), reason=body.reason, reviews_moved=moved,
@@ -277,8 +303,12 @@ def delete_employee(employee_id: int, user: User = Depends(hr_only), session: Se
         raise HTTPException(409, "Pracownik ma sporządzone oceny (dokumentacja pracownicza) - użyj „ustanie zatrudnienia”")
     if session.exec(select(Employee).where(Employee.manager_id == e.id)).first():
         raise HTTPException(409, "Pracownik jest przełożonym innych osób")
-    if session.exec(select(Review).where(Review.employee_id == e.id)).first():
-        raise HTTPException(409, "Pracownik ma rozpoczętą ocenę - usuń ją najpierw lub użyj „ustanie zatrudnienia”")
+    reviews = session.exec(select(Review).where(Review.employee_id == e.id)).all()
+    if any(r.status != "criteria" or r.criteria_reviewer_confirmed_at for r in reviews):
+        raise HTTPException(409, "Pracownik ma rozpoczętą ocenę - użyj „ustanie zatrudnienia”")
+    for r in reviews:  # arkusz założony automatycznie, bez żadnych czynności - usuwamy razem z danymi
+        session.exec(delete(ReviewCriterion).where(ReviewCriterion.review_id == r.id))
+        session.delete(r)
     _delete_notes(session, e.id)
     for a in session.exec(select(Absence).where(Absence.employee_id == e.id)).all():
         session.delete(a)
@@ -315,7 +345,8 @@ def recompute_due_dates(session: Session, employee_id: int) -> list[dict]:
                      for h in r.due_date_history)
         if manual:
             continue
-        new = dl.review_due_date(deadline_base(session, r), periods)
+        _ = periods  # nieobecności z bazy (już zapisane) uwzględnia compute_due_date
+        new = compute_due_date(session, r)
         if new != r.due_date:
             r.due_date_history = [*r.due_date_history, {
                 "from": r.due_date.isoformat() if r.due_date else None, "date": new.isoformat(),

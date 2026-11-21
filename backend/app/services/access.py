@@ -7,19 +7,33 @@
 - admin widzi wszystko.
 """
 
+from datetime import date
+
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
-from app.models import Employee, Review, User
+from app.models import Employee, Review, Substitution, User
 
 HR_VISIBLE = {"final", "acknowledged", "objection"}
 
 
-def direct_report_ids(session: Session, user: User) -> set[int]:
+def substituted_manager_ids(session: Session, user: User, on: date | None = None) -> set[int]:
+    """Przełożeni, których użytkownik dziś zastępuje (zastępstwo wprowadzone przez komórkę kadrową)."""
     if user.employee_id is None:
         return set()
-    rows = session.exec(select(Employee.id).where(Employee.manager_id == user.employee_id)).all()
+    on = on or date.today()
+    rows = session.exec(select(Substitution.absent_employee_id).where(
+        Substitution.deputy_employee_id == user.employee_id, Substitution.start <= on, Substitution.end >= on)).all()
     return set(rows)
+
+
+def direct_report_ids(session: Session, user: User) -> set[int]:
+    """Bezpośredni podwładni - także osób, które użytkownik aktualnie zastępuje."""
+    if user.employee_id is None:
+        return set()
+    managers = {user.employee_id} | substituted_manager_ids(session, user)
+    rows = session.exec(select(Employee.id).where(Employee.manager_id.in_(managers))).all()
+    return set(rows) - {user.employee_id}
 
 
 def can_access_employee(session: Session, user: User, employee_id: int) -> bool:

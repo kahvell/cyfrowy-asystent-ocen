@@ -19,7 +19,7 @@ Całość działa **lokalnie, bez chmury**. Model językowy (Bielik / PLLuM prze
 | „Wszyscy dostają bardzo dobry” | **Dashboard HR**: rozkład ocen w komórkach, kalibracja oceniających (łagodny / surowy), luki kompetencyjne, porównanie średnich K/M, adopcja AI. Tylko agregaty z k-anonimowością (grupy poniżej 5 osób są ukryte). |
 | „Czy ja muszę…?” | **Asystent przepisów**: odpowiedzi z cytatem z ustawy i rozporządzenia (RAG). |
 | Pilnowanie terminów i formalności | **Kalkulator terminów i przypomnienia**: 30/7 dni na kryteria, 24 miesiące na ocenę (przedłużenie o nieobecności > 1 mies.), 7 dni na sprzeciw, 14 dni na jego rozpatrzenie, ponowna ocena po 6 mies., obligatoryjny stopień w 30 dni. Blokady kroków, gdy brakuje wymaganych elementów. |
-| Kadry i sytuacje kadrowe | **Panel Kadry**: dane pracowników, wyszukiwanie i sortowanie, podległość służbowa (zmiana przełożonego przenosi trwającą ocenę do nowego oceniającego), nieobecności przeliczające termin oceny, ustanie zatrudnienia (oceny zostają w dokumentacji, robocze notatki są usuwane). Wniosek ocenianego o zmianę terminu, tryb korekty administratora. |
+| Kadry i sytuacje kadrowe | **Panel Kadry** (wszystkie funkcje kadrowe z diagramu przypadków użycia KPRM): schemat urzędu (komórki), **zastępstwa przełożonych** (zastępca przejmuje zespół na czas nieobecności), **oceny historyczne** sprzed wdrożenia (od nich liczą się terminy, art. 71 i 89), **import z systemu kadrowego** (CSV z weryfikacją przed zapisem), **zestawienia** do archiwizacji/kontroli (CSV) i sprawozdawczości (JSON, k-anonimowość), historia ocen; dane pracowników i podstawa zatrudnienia (art. 81 ust. 1), wyszukiwanie i sortowanie, podległość służbowa (zmiana przełożonego przenosi trwającą ocenę do nowego oceniającego), nieobecności przeliczające termin oceny, ustanie zatrudnienia (oceny zostają w dokumentacji, robocze notatki są usuwane). Wniosek ocenianego o zmianę terminu, tryb korekty administratora. |
 | Informacja do ludzi | **Powiadomienia** w systemie (dzwonek) i e-mailem (SMTP urzędu; w demo testowa skrzynka Mailpit pod http://localhost:8025, nic nie wychodzi do internetu). Codzienne przypomnienia o terminach: `python -m app.services.notify digest` z crona. |
 | Papierowy arkusz | **Cyfrowy arkusz A/B/C** ze wszystkimi polami wzoru, potwierdzeniami obu stron i **wydrukiem / PDF zgodnym ze wzorem z rozporządzenia**. Zaproszenia na rozmowy w formacie `.ics` (Outlook, Thunderbird, Google). |
 | Rozmowy, do których nikt nie uczy | **HR partner**: cel, przebieg, pytania, wskazówki komunikacyjne i trudne sytuacje dla rozmowy rozpoczynającej, bieżącej informacji zwrotnej i rozmowy oceniającej. |
@@ -98,9 +98,12 @@ Model lokalny: jak w wariancie A powyżej. Backend czyta `.env` z katalogu głó
 
 | Rola | E-mail | Co zobaczysz |
 |---|---|---|
-| Przełożony | `kierownik@demo.gov.pl` | zespół Wydziału Cyfryzacji: każdy etap procesu na innej osobie, przypomnienia, HR partner |
-| Pracownik | `pracownik@demo.gov.pl` | Anna Kowalska: własne notatki, samoocena, zapoznanie z oceną, sprzeciw, IPR |
-| HR / DG | `hr@demo.gov.pl` | dashboard urzędu (agregaty), sprzeciwy, stopnie służbowe, sporządzone arkusze |
+| Przełożony | `kierownik@demo.gov.pl` | Marek Zieliński, Wydział Cyfryzacji: każdy etap procesu na innej osobie, przypomnienia, asystent AI, HR partner, IPR |
+| Pracownik | `pracownik@demo.gov.pl` | Anna Kowalska: samoocena, potwierdzenia, zapoznanie z oceną, sprzeciw, wniosek o zmianę terminu, IPR |
+| HR / DG | `hr@demo.gov.pl` | Kadry (pracownicy, schemat urzędu, zastępstwa, import, zestawienia), sprzeciwy, zatwierdzanie IPR, dashboard |
+| Administrator | `admin@demo.gov.pl` | wszyscy pracownicy, **tryb korekty błędów** w arkuszach (z powodem i historią), kadry |
+| Przełożona | `kierownik.obsluga@demo.gov.pl` | Ewa Dąbrowska: „łagodna” oceniająca na dashboardzie; po wprowadzeniu zastępstwa przejmuje zespół Marka |
+| Przełożony | `kierownik.finanse@demo.gov.pl` | Andrzej Krawczyk: „surowy” oceniający, wydział z ocenami negatywnymi |
 
 Etapy w danych demo (zespół kierownika): **Jakub** - wyznaczenie kryteriów (nowa umowa), **Tomasz** - okres oceny z terminem przesuniętym o nieobecność, **Magdalena** - okres oceny, „warto docenić”, **Anna** i **Piotr** - przygotowanie oceny, **Katarzyna** - brak arkusza i sygnały przeciążenia.
 
@@ -149,7 +152,7 @@ Nowa wersja to nowy obraz Dockera. Przy starcie backend sam wykonuje migracje ba
 ## Testy
 
 ```bash
-cd backend && LLM_MODE=fake pytest -q   # 57 testów, bez modelu i bez kluczy API
+cd backend && LLM_MODE=fake pytest -q   # 74 testy, bez modelu i bez kluczy API
 cd frontend && npm run lint && npm run build
 ```
 

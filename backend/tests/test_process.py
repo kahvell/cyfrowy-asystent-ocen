@@ -4,6 +4,8 @@ from datetime import date
 
 import pytest
 
+from app.services import deadlines as dl
+
 
 def _team(client, h):
     return {e["full_name"]: e for e in client.get("/employees", headers=h).json()}
@@ -51,8 +53,9 @@ def test_due_date_extended_by_long_absence(client, manager):
     rid = _review_of(client, manager, "Tomasz Wójcik")
     r = client.get(f"/reviews/{rid}", headers=manager).json()
     assert r["status"] == "observation"
-    # 1.12.2024 + 24 mies. = 1.12.2026; nieobecność 1.09-17.10.2025 (47 dni, weekend nie przerywa) -> 17.01.2027 (nd)
-    assert r["deadlines"]["due_date"] == "2027-01-18"
+    # 24 mies. od sporządzenia poprzedniej oceny (25.11.2024, art. 81 ust. 4) = 25.11.2026;
+    # + nieobecność 1.09-17.10.2025 (47 dni, weekend nie przerywa ciągłości, art. 81 ust. 7) -> 11.01.2027 (pn)
+    assert r["deadlines"]["due_date"] == "2027-01-11"
 
 
 def test_due_date_change_requires_reason_and_is_logged(client, manager):
@@ -65,10 +68,18 @@ def test_due_date_change_requires_reason_and_is_logged(client, manager):
 
 
 def test_acknowledgement_objection_and_decision(client, manager, employee, hr):
-    rid = _review_of(client, manager, "Anna Kowalska")
-    r = client.get(f"/reviews/{rid}", headers=manager).json()
-    if r["status"] != "final":
+    anna = _team(client, manager)["Anna Kowalska"]
+    mine = client.get(f"/reviews?employee_id={anna['id']}", headers=manager).json()
+    finals = [x for x in mine if x["status"] == "final"]
+    if not finals:
         pytest.skip("wymaga oceny zatwierdzonej w test_api_flow")
+    rid = finals[0]["id"]
+    r = client.get(f"/reviews/{rid}", headers=manager).json()
+    # schemat procesu: po sporządzeniu oceny - koniec cyklu i początek następnego (kryteria w 30 dni, § 7)
+    nxt = [x for x in mine if x["status"] == "criteria"]
+    assert nxt, "po sporządzeniu oceny powinien rozpocząć się kolejny cykl"
+    nr = client.get(f"/reviews/{nxt[0]['id']}", headers=manager).json()
+    assert nr["deadlines"]["criteria_deadline"] == dl.days_deadline(date.today(), 30).isoformat()
     assert r["reviewer_signed_at"] == date.today().isoformat()
     # objaśnienie 7 do arkusza: „okres do” = data sporządzenia oceny na piśmie
     assert r["period_end"] == date.today().isoformat()
@@ -85,9 +96,24 @@ def test_acknowledgement_objection_and_decision(client, manager, employee, hr):
     # sprzeciw rozpatruje dyrektor generalny, nie oceniający
     assert client.post(f"/reviews/{rid}/objection/decision", headers=manager,
                        json={"decision": "odrzucony"}).status_code == 403
-    dec = client.post(f"/reviews/{rid}/objection/decision", headers=hr, json={"decision": "zmiana"})
-    assert dec.status_code == 200
-    assert dec.json()["status"] == "discussed" and dec.json()["acknowledged_at"] is None
+    # „zmiana” bez wprowadzonych zmian jest odrzucana - zmianę wpisuje dyrektor generalny w formularzu
+    assert client.post(f"/reviews/{rid}/objection/decision", headers=hr, json={"decision": "zmiana"}).status_code == 422
+    komunikacja = next(c for c in r["criteria"] if c["code"] == "KOMUNIKACJA")
+    # uwzględnienie sprzeciwu nie może obniżyć oceny (art. 83 ust. 4, poradnik KPRM rozdz. 7)
+    if komunikacja["score"] > 1:
+        low = client.post(f"/reviews/{rid}/objection/decision", headers=hr, json={
+            "decision": "zmiana", "changes": {"criteria": [{"criterion_id": komunikacja["criterion_id"], "score": 1}]}})
+        assert low.status_code == 422 and "obniżyć" in low.text
+    assert komunikacja["score"] <= 7
+    dec =client.post(f"/reviews/{rid}/objection/decision", headers=hr, json={
+        "decision": "zmiana", "changes": {"criteria": [{"criterion_id": komunikacja["criterion_id"], "score": 7,
+                                                        "justification": "Zmieniono po uwzględnieniu sprzeciwu."}]}})
+    assert dec.status_code == 200, dec.text
+    body = dec.json()
+    assert body["status"] == "acknowledged" and body["objection_decision"] == "zmiana"
+    assert next(c for c in body["criteria"] if c["code"] == "KOMUNIKACJA")["score"] == 7
+    notes = client.get("/notifications", headers=employee).json()
+    assert any("zmieniona po sprzeciwie" in n["subject"] for n in notes)
 
 
 def test_hr_cannot_see_drafts(client, manager, hr):
@@ -147,3 +173,27 @@ def test_period_from_is_criteria_acknowledgement_date(client, manager):
     assert r["period_start"] == before["criteria_employee_confirmed_at"] == "2024-12-11"
     # termin oceny liczony dalej od początku okresu (24 mies.), nie od daty zapoznania z kryteriami
     assert r["deadlines"]["due_date"] == before["deadlines"]["due_date"]
+
+
+def test_new_employee_starts_review_cycle(client, hr, manager):
+    """Schemat procesu: „wprowadza dane pracownika podlegającego ocenie” -> przypomnienie o kryteriach
+    dla oceniającego i informacja o rozpoczęciu cyklu dla ocenianego."""
+    struct = client.get("/admin/structure", headers=hr).json()
+    zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
+    r = client.post("/admin/employees", headers=hr, json={
+        "full_name": "Celina Cyklowa", "position": "Inspektor", "department_id": struct["departments"][0]["id"],
+        "manager_id": zielinski["id"], "employment_start": date.today().isoformat(), "email": "celina.c@demo.gov.pl"})
+    assert r.status_code == 201 and r.json()["review_started"]
+    rv = client.get(f"/reviews/{r.json()['review_started']}", headers=manager).json()
+    assert rv["status"] == "criteria"
+    assert rv["deadlines"]["criteria_deadline"] == dl.days_deadline(date.today(), 30).isoformat()
+    assert any("Wyznacz kryteria" in n["subject"] and "Celina" in n["subject"]
+               for n in client.get("/notifications", headers=manager).json())
+
+
+def test_invitation_notifies_employee(client, manager, employee):
+    anna = _team(client, manager)["Anna Kowalska"]
+    rid = anna["current_review"]["id"]
+    r = client.get(f"/reviews/{rid}/invite.ics?kind=opening&when=2026-12-03T10:00", headers=manager)
+    assert r.status_code == 200
+    assert any("zaproszenie" in n["subject"] for n in client.get("/notifications", headers=employee).json())

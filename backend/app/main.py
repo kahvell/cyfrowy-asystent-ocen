@@ -5,7 +5,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 
-from app.api import admin, ai, analytics, assistant, auth, employees, hr_partner, ipr, reminders, reviews
+from app.api import (
+    admin,
+    ai,
+    analytics,
+    assistant,
+    auth,
+    employees,
+    hr_functions,
+    hr_partner,
+    ipr,
+    reminders,
+    reviews,
+)
 from app.config import settings
 from app.db import engine, init_db
 from app.models import User
@@ -40,7 +52,7 @@ app.add_middleware(
 )
 
 for r in (auth.router, employees.router, reviews.router, ai.router, ipr.router, analytics.router, assistant.router,
-          reminders.router, hr_partner.router, admin.router):
+          reminders.router, hr_partner.router, admin.router, hr_functions.router):
     app.include_router(r)
 
 

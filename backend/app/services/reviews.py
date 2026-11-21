@@ -24,6 +24,7 @@ from app.models import (
 from app.services.process import (
     SECOND_NEGATIVE_WARNING,
     form_people,
+    grade_label,
     promotion_target,
     review_deadlines,
     second_negative_risk,
@@ -176,6 +177,9 @@ def serialize_review(session: Session, review: Review, *, viewer_is_reviewer: bo
         "civil_grade": review.civil_grade,
         "civil_grade_date": iso(review.civil_grade_date),
         "promotion_target": promotion_target(review),
+        "civil_grade_label": grade_label(review.civil_grade),
+        "signature_method": review.signature_method,
+        "objection_body": review.objection_body,
         "promotion_justification": "" if hide else review.promotion_justification,
         "reviewer_place": review.reviewer_place,
         "reviewer_signed_at": iso(review.reviewer_signed_at),

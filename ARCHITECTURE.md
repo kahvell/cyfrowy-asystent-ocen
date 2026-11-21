@@ -334,20 +334,22 @@ Etapy, pola arkusza i ich edytowalność odwzorowują przypadki użycia oraz „
 
 ```mermaid
 stateDiagram-v2
-    [*] --> criteria: utworzenie arkusza A/B/C (termin kryteriów 30 dni / 7 po ocenie negatywnej)
+    [*] --> criteria: kadry wprowadzają pracownika albo sporządzono poprzednią ocenę (start automatyczny; kryteria 30 / 7 dni, § 7)
     criteria --> observation: rozmowa rozpoczynająca (§ 5) + potwierdzenie oceniającego i ocenianego
     observation --> draft: przygotowanie oceny (termin: 24 mies. + nieobecności > 1 mies.)
     draft --> submitted: kontrola jakości bez krytycznych braków
     submitted --> draft: korekta
     submitted --> discussed: rozmowa oceniająca (§ 10)
-    discussed --> final: ocena na piśmie + wnioski do IPR + podpis oceniającego (§ 11)
+    discussed --> final: ocena na piśmie + wnioski do IPR + podpis oceniającego (§ 11); start kolejnego cyklu
     final --> acknowledged: zapoznanie ocenianego albo fikcja zapoznania
     acknowledged --> objection: sprzeciw w 7 dni (art. 83 ust. 1)
     objection --> acknowledged: sprzeciw nieuwzględniony
-    objection --> discussed: zmiana oceny
+    objection --> acknowledged: zmiana oceny - wprowadza dyrektor generalny w formularzu
     objection --> draft: sporządzenie po raz drugi
     acknowledged --> [*]
 ```
+
+Przebieg odwzorowuje schemat procesu KPRM (BPMN, tory: zarządzający, oceniający, oceniany, admin, scheduler): start cyklu po wprowadzeniu pracownika i po każdej sporządzonej ocenie (`services/cycle.py`), powiadomienia stron na każdym kroku, zmiana oceny po sprzeciwie wprowadzana przez dyrektora generalnego.
 
 Terminy liczy `services/deadlines.py` (miesiące z końcem miesiąca, dni od zdarzenia, przesunięcie na dzień roboczy z polskimi świętami, łączenie nieobecności). Przypomnienia (`/reminders`) to „scheduler” z przypadków użycia - liczony przy odczycie, gotowy do podpięcia pod cron i e-mail.
 

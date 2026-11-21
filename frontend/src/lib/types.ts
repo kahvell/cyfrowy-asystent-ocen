@@ -78,6 +78,8 @@ export interface EmployeeDetail {
   position_description: string;
   sheet_type: string;
   is_civil_servant: boolean;
+  contract_type?: "mianowanie" | "nieokreslony" | "okreslony";
+  senior_position?: boolean;
   reviews: { id: number; status: ReviewStatus; cycle_id: number; cycle_name: string; overall_level: string | null; result: string | null }[];
 }
 
@@ -133,6 +135,9 @@ export interface Review {
   civil_grade: number | null;
   civil_grade_date: string | null;
   promotion_target: string | null;
+  civil_grade_label?: string | null;
+  signature_method?: "system" | "wydruk" | "elektroniczny";
+  objection_body?: string | null;
   promotion_justification: string;
   reviewer_place: string;
   reviewer_signed_at: string | null;
@@ -148,6 +153,7 @@ export interface Review {
     criteria_deadline: string | null;
     due_date: string | null;
     can_change_due_date: boolean;
+    is_repeat_review?: boolean;
     objection_deadline: string | null;
     objection_open: boolean;
     repeat_review_date: string | null;

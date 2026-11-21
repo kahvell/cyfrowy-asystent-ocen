@@ -158,7 +158,10 @@ def objection_deadline(acknowledged: date) -> date:
 
 
 def repeat_review_date(acknowledged: date) -> date:
-    return months_deadline(acknowledged, RULES["repeat_after_negative_months"])
+    """Art. 81 ust. 9: ponowna ocena „po upływie 6 miesięcy” od zapoznania z oceną negatywną - najwcześniej
+    dzień po upływie tego okresu (poradnik KPRM: zapoznanie 15.02 -> ocena 16.08). Terminu nie przedłuża się
+    o nieobecności i nie zmienia w trybie art. 81 ust. 8."""
+    return next_working_day(add_months(acknowledged, RULES["repeat_after_negative_months"]) + timedelta(days=1))
 
 
 def promotion_deadline(acknowledged: date) -> date:

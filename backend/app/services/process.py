@@ -26,10 +26,11 @@ GRADE_WORDS = ["", "pierwszego", "drugiego", "trzeciego", "czwartego", "piątego
 
 # pola edytowalne na danym etapie - wg „schematu pól formularza” (KPRM)
 CRITERIA_FIELDS = {"additional_criterion_ids", "due_date", "opening_conversation_date", "opening_notes",
-                   "criteria_reviewer_place"}
+                   "criteria_reviewer_place", "signature_method"}
 EVALUATION_FIELDS = {"criteria", "justification", "ipr_conclusions", "conversation_date", "period_start",
                      "period_end", "prev_result", "prev_level", "prev_date", "promotion_request", "appointment_year",
-                     "civil_grade", "civil_grade_date", "promotion_justification", "reviewer_place"}
+                     "civil_grade", "civil_grade_date", "promotion_justification", "reviewer_place",
+                     "signature_method", "objection_body"}
 EVALUATION_STATUSES = {"draft", "submitted", "discussed"}
 
 
@@ -44,12 +45,26 @@ def office_of(session: Session, emp: Employee) -> Office | None:
 
 
 def previous_review(session: Session, review: Review) -> Review | None:
-    """Ostatnia zakończona ocena tego pracownika sprzed bieżącej."""
-    q = (select(Review)
+    """Ostatnia sporządzona ocena tego pracownika z wcześniejszego cyklu (kolejność cykli, nie dat okresu -
+    „okres od-do” w arkuszu zmienia się w trakcie procesu)."""
+    from sqlalchemy import func
+
+    from app.models import ReviewCycle
+
+    cur = session.get(ReviewCycle, review.cycle_id)
+    q = (select(Review).join(ReviewCycle, ReviewCycle.id == Review.cycle_id)
          .where(Review.employee_id == review.employee_id, Review.id != review.id,
-                Review.status.in_(["final", "acknowledged"]), Review.period_end <= review.period_start)
-         .order_by(Review.period_end.desc()))
+                Review.status.in_(["final", "acknowledged", "objection"]))
+         # najpóźniej sporządzona (także oceny historyczne wprowadzone przez kadry)
+         .order_by(func.coalesce(Review.reviewer_signed_at, Review.period_end).desc(), Review.id.desc()))
+    if cur is not None:
+        q = q.where(ReviewCycle.period_start < cur.period_start)
     return session.exec(q).first()
+
+
+def drawn_up_date(r: Review) -> date:
+    """Dzień sporządzenia oceny na piśmie (podpis oceniającego)."""
+    return r.reviewer_signed_at or (r.finalized_at.date() if r.finalized_at else r.period_end)
 
 
 def prefill_previous(session: Session, review: Review) -> None:
@@ -59,7 +74,7 @@ def prefill_previous(session: Session, review: Review) -> None:
         return
     review.prev_result = prev.result
     review.prev_level = prev.overall_level
-    review.prev_date = prev.reviewer_signed_at or (prev.finalized_at.date() if prev.finalized_at else prev.period_end)
+    review.prev_date = drawn_up_date(prev)
 
 
 def obligatory_promotion(session: Session, review: Review) -> bool:
@@ -70,11 +85,13 @@ def obligatory_promotion(session: Session, review: Review) -> bool:
         return False
     if review.result != "pozytywna" or review.overall_level not in TOP_LEVELS:
         return False
-    prev_level = review.prev_level
-    prev_result = review.prev_result
+    prev_level, prev_result, prev_date = review.prev_level, review.prev_result, review.prev_date
     prev = previous_review(session, review)
     if prev is not None:
-        prev_level, prev_result = prev.overall_level, prev.result
+        prev_level, prev_result, prev_date = prev.overall_level, prev.result, drawn_up_date(prev)
+    # „od otrzymania ostatniego stopnia służbowego” - obie oceny muszą być sporządzone po przyznaniu stopnia
+    if emp.civil_grade_date and (prev_date is None or prev_date < emp.civil_grade_date):
+        return False
     return prev_result == "pozytywna" and prev_level in TOP_LEVELS
 
 
@@ -100,31 +117,56 @@ SECOND_NEGATIVE_WARNING = {
 
 
 def deadline_base(session: Session, review: Review) -> date:
-    """Początek biegu 24 miesięcy: nawiązanie stosunku pracy / poprzednia ocena (początek cyklu).
-    Nie mylić z polem „okres od” w arkuszu, które jest datą zapoznania z kryteriami (objaśnienie 6 do arkusza)."""
+    """Początek biegu terminów (art. 81 ust. 4, § 7 pkt 1): dzień sporządzenia na piśmie poprzedniej oceny,
+    a przy pierwszej ocenie - dzień zatrudnienia na czas nieokreślony / mianowania.
+    Nie mylić z polem „okres od” w arkuszu (data zapoznania z kryteriami, objaśnienie 6 do arkusza)."""
     from app.models import ReviewCycle
 
-    cycle = session.get(ReviewCycle, review.cycle_id)
+    prev = previous_review(session, review)
+    if prev is not None:
+        return drawn_up_date(prev)
     emp = session.get(Employee, review.employee_id)
-    base = cycle.period_start if cycle else review.period_start
-    if emp and emp.employment_start and emp.employment_start > base:
-        base = emp.employment_start
-    return base
+    if emp and emp.employment_start:
+        return emp.employment_start
+    cycle = session.get(ReviewCycle, review.cycle_id)
+    return cycle.period_start if cycle else review.period_start
+
+
+def is_repeat_review(session: Session, review: Review) -> bool:
+    """Ponowna ocena po ocenie negatywnej (art. 81 ust. 9) - termin sztywny: bez zmiany (art. 81 ust. 8)
+    i bez przedłużania o nieobecności (poradnik KPRM, rozdz. 5)."""
+    prev = previous_review(session, review)
+    return bool(prev and prev.result == "negatywna")
+
+
+def compute_due_date(session: Session, review: Review) -> date:
+    """Termin sporządzenia oceny:
+    - po ocenie negatywnej: 6 miesięcy od zapoznania się z nią (art. 81 ust. 9),
+    - w pozostałych przypadkach: 24 miesiące od poprzedniej oceny / zatrudnienia (art. 81 ust. 4),
+      przedłużone o nieobecności usprawiedliwione dłuższe niż miesiąc (art. 81 ust. 7)."""
+    prev = previous_review(session, review)
+    if prev is not None and prev.result == "negatywna":
+        return dl.repeat_review_date(prev.acknowledged_at or drawn_up_date(prev))
+    return dl.review_due_date(deadline_base(session, review), absences(session, review.employee_id))
 
 
 def init_deadlines(session: Session, review: Review) -> None:
+    """Termin wyznaczenia kryteriów (§ 7): 30 dni od sporządzenia poprzedniej oceny lub zatrudnienia,
+    7 dni od sporządzenia oceny negatywnej; termin oceny wg compute_due_date."""
     prev = previous_review(session, review)
-    review.criteria_deadline = dl.criteria_deadline(review.period_start, previous_negative=bool(
+    review.criteria_deadline = dl.criteria_deadline(deadline_base(session, review), previous_negative=bool(
         prev and prev.result == "negatywna"))
-    review.due_date = dl.review_due_date(review.period_start, absences(session, review.employee_id))
+    review.due_date = compute_due_date(session, review)
 
 
 def review_deadlines(session: Session, review: Review, today: date | None = None) -> dict:
     today = today or date.today()
+    repeat = is_repeat_review(session, review)
     out: dict = {
         "criteria_deadline": review.criteria_deadline.isoformat() if review.criteria_deadline else None,
         "due_date": review.due_date.isoformat() if review.due_date else None,
-        "can_change_due_date": dl.can_change_due_date(deadline_base(session, review), today),
+        "is_repeat_review": repeat,
+        "can_change_due_date": not repeat and dl.can_change_due_date(deadline_base(session, review), today),
         "objection_deadline": None,
         "objection_open": False,
         "repeat_review_date": None,
@@ -134,7 +176,10 @@ def review_deadlines(session: Session, review: Review, today: date | None = None
     if review.acknowledged_at:
         od = dl.objection_deadline(review.acknowledged_at)
         out["objection_deadline"] = od.isoformat()
-        out["objection_open"] = review.status == "acknowledged" and today <= od and not review.objection_at
+        # sprzeciw dotyczący wcześniejszej wersji oceny nie blokuje sprzeciwu od oceny sporządzonej po raz drugi
+        # (art. 83 ust. 4)
+        out["objection_open"] = review.status == "acknowledged" and today <= od and (
+            not review.objection_at or review.objection_decision == "ponowne_sporzadzenie")
         if review.result == "negatywna":
             out["repeat_review_date"] = dl.repeat_review_date(review.acknowledged_at).isoformat()
         if obligatory_promotion(session, review):
@@ -162,10 +207,20 @@ def form_people(session: Session, review: Review) -> dict:
 
     return {
         "office": {"name": office.name if office else "", "city": office.city if office else "",
-                   "objection_body": office.objection_body if office else "dyrektora generalnego urzędu"},
+                   "objection_body": review.objection_body or (office.objection_body if office else
+                                                               "dyrektora generalnego urzędu")},
         "employee_form": person(emp),
         "reviewer_form": person(reviewer, reviewer_user.full_name if reviewer_user else ""),
     }
+
+
+ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]
+GRADE_NOM = ["", "pierwszy", "drugi", "trzeci", "czwarty", "piąty", "szósty", "siódmy", "ósmy", "dziewiąty"]
+
+
+def grade_label(grade: int | None) -> str | None:
+    """Stopień służbowy w formacie z arkusza KPRM, np. „III - trzeci”."""
+    return f"{ROMAN[grade]} - {GRADE_NOM[grade]}" if grade and 1 <= grade <= 9 else None
 
 
 def promotion_target(review: Review) -> str | None:

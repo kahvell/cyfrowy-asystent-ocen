@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownUp, CalendarX2, Plus, Search, Trash2, UserMinus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { ExportPanel, ImportPanel, ReviewHistory, StructurePanel, SubstitutionsPanel } from "@/components/hr-admin";
 import { Badge, Button, Card, CardHeader, ErrorBox, Input, Label, PageTitle, Spinner, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cn, fmtDate, STATUS_LABEL, statusTone } from "@/lib/utils";
@@ -18,6 +19,7 @@ interface HrEmployee {
   manager_name: string | null;
   sheet_type: string;
   is_civil_servant: boolean;
+  contract_type: "mianowanie" | "nieokreslony" | "okreslony";
   employment_start: string | null;
   employment_end: string | null;
   appointment_year: number | null;
@@ -62,6 +64,7 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
     manager_id: emp?.manager_id ?? null,
     sheet_type: emp?.sheet_type ?? "C",
     is_civil_servant: emp?.is_civil_servant ?? false,
+    contract_type: emp?.contract_type ?? "nieokreslony",
     employment_start: emp?.employment_start ?? "",
     appointment_year: emp?.appointment_year ?? null,
     civil_grade: emp?.civil_grade ?? null,
@@ -177,9 +180,22 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
         <Label htmlFor="start">Nawiązanie stosunku pracy na czas nieokreślony / mianowanie</Label>
         <Input id="start" type="date" value={f.employment_start} onChange={(e) => set("employment_start", e.target.value)} />
       </div>
-      <label className="flex items-center gap-2 text-sm sm:col-span-2">
-        <input type="checkbox" checked={f.is_civil_servant} onChange={(e) => set("is_civil_servant", e.target.checked)} /> urzędnik służby cywilnej (mianowany)
-      </label>
+      <div className="sm:col-span-2">
+        <Label htmlFor="contract">Podstawa zatrudnienia</Label>
+        <select
+          id="contract"
+          className={select}
+          value={f.contract_type}
+          onChange={(e) => {
+            const v = e.target.value as typeof f.contract_type;
+            setF({ ...f, contract_type: v, is_civil_servant: v === "mianowanie" });
+          }}
+        >
+          <option value="mianowanie">mianowanie - urzędnik służby cywilnej</option>
+          <option value="nieokreslony">umowa o pracę na czas nieokreślony - pracownik służby cywilnej</option>
+          <option value="okreslony">umowa o pracę na czas określony - nie podlega ocenie okresowej (art. 81 ust. 1)</option>
+        </select>
+      </div>
       <label className="flex items-center gap-2 text-sm sm:col-span-2">
         <input type="checkbox" checked={f.senior_position} onChange={(e) => set("senior_position", e.target.checked)} /> wyższe stanowisko w służbie cywilnej
         (art. 52, np. dyrektor generalny, kierujący wydziałem w urzędzie wojewódzkim) - bez IPR (art. 108)
@@ -337,6 +353,7 @@ function EmployeeDetail({ emp, structure, onClose }: { emp: HrEmployee; structur
       <div className="grid gap-6 p-5 lg:grid-cols-[1fr_380px]">
         <EmployeeForm key={emp.id} emp={emp} structure={structure} onDone={onClose} />
         <div className="space-y-6">
+          <ReviewHistory employeeId={emp.id} />
           <AbsencesPanel emp={emp} />
           {emp.active && (
             <div className="space-y-2 border-t border-border pt-4 text-sm">
@@ -366,7 +383,17 @@ function EmployeeDetail({ emp, structure, onClose }: { emp: HrEmployee; structur
   );
 }
 
+type HrTab = "people" | "structure" | "substitutions" | "import" | "export";
+const TABS: [HrTab, string][] = [
+  ["people", "Pracownicy"],
+  ["structure", "Schemat urzędu"],
+  ["substitutions", "Zastępstwa"],
+  ["import", "Import z systemu kadrowego"],
+  ["export", "Zestawienia"],
+];
+
 export default function HrPage() {
+  const [tab, setTab] = useState<HrTab>("people");
   const [q, setQ] = useState("");
   const [inactive, setInactive] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "full_name", dir: 1 });
@@ -401,17 +428,34 @@ export default function HrPage() {
         title="Kadry"
         subtitle="Dane pracowników, podległość służbowa (kto kogo ocenia), nieobecności i zatrudnienie. Bez dostępu do dziennika obserwacji i szkiców ocen."
         action={
-          <Button onClick={() => setAdding(true)}>
+          <Button onClick={() => (setTab("people"), setAdding(true))}>
             <Plus className="h-4 w-4" aria-hidden /> Dodaj pracownika
           </Button>
         }
       />
-      {msg && (
+      <div className="mb-6 flex flex-wrap gap-1 border-b border-border" role="tablist">
+        {TABS.map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={cn("-mb-px px-4 py-2 text-sm", tab === key ? "border-b-2 border-primary font-medium text-primary" : "text-slate-600 hover:text-foreground")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "structure" && <StructurePanel />}
+      {tab === "substitutions" && <SubstitutionsPanel people={data ?? []} />}
+      {tab === "import" && <ImportPanel />}
+      {tab === "export" && <ExportPanel />}
+      {tab === "people" && msg && (
         <p className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900" role="status">
           {msg}
         </p>
       )}
-      {adding && structure && (
+      {tab === "people" && adding && structure && (
         <Card className="mb-6">
           <CardHeader title="Nowy pracownik" subtitle="Arkusz dobierz do stanowiska; termin pierwszej oceny wyliczy się od daty nawiązania stosunku pracy." />
           <div className="p-5">
@@ -419,11 +463,12 @@ export default function HrPage() {
           </div>
         </Card>
       )}
-      {current && structure && (
+      {tab === "people" && current && structure && (
         <div className="mb-6">
           <EmployeeDetail key={current.id} emp={current} structure={structure} onClose={close} />
         </div>
       )}
+      {tab === "people" && (
       <Card>
         <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
           <div className="relative min-w-60 flex-1">
@@ -459,7 +504,7 @@ export default function HrPage() {
                       <div className="font-medium text-primary">{e.full_name}</div>
                       <div className="text-xs text-muted">
                         {e.position}
-                        {e.is_civil_servant ? " · urzędnik" : ""}
+                        {e.is_civil_servant ? " · urzędnik" : e.contract_type === "okreslony" ? " · czas określony" : ""}
                         {!e.active && ` · zatrudnienie do ${fmtDate(e.employment_end)}`}
                       </div>
                     </td>
@@ -475,6 +520,7 @@ export default function HrPage() {
           </div>
         )}
       </Card>
+      )}
     </>
   );
 }

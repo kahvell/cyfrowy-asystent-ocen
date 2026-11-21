@@ -104,6 +104,8 @@ def test_admin_correction_mode(client, manager, admin):
     ok = client.patch(f"/reviews/{rid}", headers=admin,
                       json={"opening_notes": "Korekta literówki", "correction_reason": "błąd pisarski w ustaleniach"})
     assert ok.status_code == 200 and ok.json()["opening_notes"] == "Korekta literówki"
+    log = client.get(f"/reviews/{rid}/corrections", headers=manager).json()
+    assert log and log[0]["reason"] == "błąd pisarski w ustaleniach" and "opening_notes" in log[0]["fields"]
 
 
 def test_notifications_and_mark_read(client, employee):

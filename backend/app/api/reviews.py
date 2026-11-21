@@ -15,6 +15,7 @@ from sqlmodel import Session, select
 from app.analytics.quality_rules import has_critical
 from app.db import get_session
 from app.models import (
+    AuditLog,
     Criterion,
     DueDateRequest,
     Employee,
@@ -29,15 +30,18 @@ from app.security import get_current_user
 from app.services import deadlines as dl
 from app.services.access import ensure_employee_access, get_review_for, is_manager_of, is_reviewer
 from app.services.audit import audit
+from app.services.cycle import CycleError, start_next_cycle, start_review
 from app.services.notify import notify_employee, notify_hr, notify_reviewer
 from app.services.process import (
     CRITERIA_FIELDS,
     EVALUATION_FIELDS,
     EVALUATION_STATUSES,
     deadline_base,
-    init_deadlines,
+    is_repeat_review,
+    obligatory_promotion,
     office_of,
     prefill_previous,
+    promotion_target,
     second_negative_risk,
 )
 from app.services.reviews import (
@@ -102,30 +106,22 @@ def create_review(body: ReviewCreate, user: User = Depends(get_current_user), se
     cycle = session.get(ReviewCycle, body.cycle_id)
     if cycle is None or cycle.status != "open":
         raise HTTPException(422, "Cykl oceny nie istnieje lub jest zamknięty")
-    if session.exec(select(Review).where(Review.employee_id == emp.id, Review.cycle_id == cycle.id)).first():
-        raise HTTPException(409, "Ocena dla tego pracownika w tym cyklu już istnieje")
-    mandatory = mandatory_criteria(session, emp.sheet_type)
-    mandatory_ids = {c.id for c in mandatory}
-    additional = [cid for cid in dict.fromkeys(body.additional_criterion_ids) if cid not in mandatory_ids]
-    if any(session.get(Criterion, cid) is None for cid in additional):
-        raise HTTPException(422, "Nieznane kryterium dodatkowe")
-    office = office_of(session, emp)
-    review = Review(employee_id=emp.id, reviewer_id=user.id, cycle_id=cycle.id, sheet_type=emp.sheet_type,
-                    status="criteria", period_start=max(cycle.period_start, emp.employment_start or cycle.period_start),
-                    period_end=cycle.period_end, criteria_reviewer_place=office.city if office else "",
-                    promotion_request="nie" if emp.is_civil_servant else "nie_dotyczy")
-    session.add(review)
-    session.flush()
-    init_deadlines(session, review)
-    review.period_end = review.due_date or review.period_end  # okres oceny: do terminu sporządzenia oceny
-    for c in mandatory:
-        session.add(ReviewCriterion(review_id=review.id, criterion_id=c.id))
-    for cid in additional:
-        session.add(ReviewCriterion(review_id=review.id, criterion_id=cid, is_additional=True))
+    try:
+        review = start_review(session, emp, user, cycle, body.additional_criterion_ids, explicit=True)
+    except CycleError as exc:
+        raise HTTPException(409 if "już istnieje" in str(exc) else 422, str(exc)) from exc
     audit(session, user, "create", "review", review.id, employee_id=emp.id)
     session.commit()
     session.refresh(review)
-    return serialize_review(session, review, viewer_is_reviewer=True)
+    out = serialize_review(session, review, viewer_is_reviewer=True)
+    if emp.senior_position:
+        out["notice"] = SENIOR_NOTICE
+    return out
+
+
+SENIOR_NOTICE = ("Oceniany zajmuje wyższe stanowisko w służbie cywilnej (art. 52). Wg poradnika KPRM (rozdz. 3) takie "
+                 "osoby nie podlegają ocenie okresowej z art. 81 - cykl nie startuje automatycznie, a ocena założona "
+                 "ręcznie ma charakter oceny wg praktyki urzędu; IPR nie jest sporządzany (art. 108).")
 
 
 @router.get("/reviews/{review_id}")
@@ -172,6 +168,8 @@ class ReviewPatch(BaseModel):
     prev_date: date | None = None
     promotion_request: Literal["tak", "nie", "nie_dotyczy"] | None = None
     reviewer_place: str | None = None
+    signature_method: Literal["system", "wydruk", "elektroniczny"] | None = None
+    objection_body: str | None = None  # arkusz A: organ, do którego służy sprzeciw
     # Część III
     appointment_year: int | None = Field(default=None, ge=1996, le=2100)
     civil_grade: int | None = Field(default=None, ge=1, le=9)
@@ -240,7 +238,9 @@ def patch_review(review_id: int, body: ReviewPatch, user: User = Depends(get_cur
     for field in ("period_start", "period_end", "due_date"):
         if field in simple and getattr(body, field) is None:
             raise HTTPException(422, "Daty okresu oceny i terminu nie mogą być puste")
-    if (body.period_start or review.period_start) > (body.period_end or review.period_end):
+    # walidacja tylko przy zmianie dat okresu (ocena po terminie może mieć „okres do” sprzed „okres od”
+    # do chwili sporządzenia - wtedy „okres do” ustawia się na datę sporządzenia, objaśnienie 7 do arkusza)
+    if ("period_start" in simple or "period_end" in simple) and             (body.period_start or review.period_start) > (body.period_end or review.period_end):
         raise HTTPException(422, "Początek okresu oceny musi być wcześniejszy niż jego koniec")
     for field in simple:
         setattr(review, field, getattr(body, field))
@@ -254,6 +254,10 @@ def patch_review(review_id: int, body: ReviewPatch, user: User = Depends(get_cur
     session.add(review)
     audit(session, user, "correction" if correction else "update", "review", review.id, fields=sorted(sent),
           reason=body.correction_reason)
+    if correction:
+        msg = f"Administrator poprawił błąd w arkuszu ({', '.join(sorted(sent))}). Powód: {body.correction_reason}"
+        notify_employee(session, review, "Korekta błędu w arkuszu oceny", msg)
+        notify_reviewer(session, review, "Korekta błędu w arkuszu oceny", msg)
     session.commit()
     session.refresh(review)
     return serialize_review(session, review, viewer_is_reviewer=True)
@@ -330,6 +334,9 @@ class DueDateChange(BaseModel):
     note: str = ""
 
 
+REPEAT_FIXED = ("Ponowna ocena po ocenie negatywnej odbywa się po upływie 6 miesięcy od zapoznania się z oceną "
+                "(art. 81 ust. 9) - tego terminu nie zmienia się w trybie art. 81 ust. 8 ani nie przedłuża o nieobecności.")
+
 DUE_REASONS = {
     "zmiana_oceniajacego": "zmiana na stanowisku oceniającego (art. 81 ust. 8 pkt 1)",
     "nieobecnosc_ocenianego": "przewidywana dłuższa nieobecność ocenianego (art. 81 ust. 8 pkt 2)",
@@ -346,6 +353,8 @@ def change_due_date(review_id: int, body: DueDateChange, user: User = Depends(ge
     review = get_review_for(session, user, review_id, manage=True)
     if review.status not in ("observation", "draft", "submitted"):
         raise HTTPException(409, "Termin można zmienić w okresie oceny, przed rozmową oceniającą")
+    if is_repeat_review(session, review):
+        raise HTTPException(409, REPEAT_FIXED)
     if body.reason != "dluga_nieobecnosc" and not dl.can_change_due_date(deadline_base(session, review), date.today()):
         raise HTTPException(409, "Zmiana terminu jest możliwa, gdy od początku okresu oceny minęło ponad 6 miesięcy "
                                  "(art. 81 ust. 8)")
@@ -389,6 +398,8 @@ def request_due_date(review_id: int, body: DueDateRequestIn, user: User = Depend
         raise HTTPException(403, "Wniosek składa oceniany")
     if review.status not in ("observation", "draft", "submitted"):
         raise HTTPException(409, "Wniosek można złożyć w okresie oceny, przed rozmową oceniającą")
+    if is_repeat_review(session, review):
+        raise HTTPException(409, REPEAT_FIXED)
     if not dl.can_change_due_date(deadline_base(session, review), date.today()):
         raise HTTPException(409, "Wniosek o zmianę terminu można złożyć po upływie 6 miesięcy od początku okresu oceny "
                                  "(art. 81 ust. 8)")
@@ -449,6 +460,7 @@ def start_evaluation(review_id: int, user: User = Depends(get_current_user), ses
         prefill_previous(session, review)
         # „okres od” = data zapoznania ocenianego z kryteriami (objaśnienie 6 do wzoru arkusza)
         review.period_start = review.criteria_employee_confirmed_at or review.period_start
+        review.period_end = max(review.period_end, review.period_start)  # ocena po terminie
         emp = session.get(Employee, review.employee_id)
         if emp and emp.is_civil_servant:
             review.appointment_year = review.appointment_year or emp.appointment_year
@@ -521,14 +533,23 @@ def finalize(review_id: int, body: PlaceIn | None = None, user: User = Depends(g
         raise HTTPException(409, {"message": "Nie można zatwierdzić oceny", "warnings": warnings})
     review.finalized_at = utcnow()
     review.reviewer_signed_at = date.today()
-    # „okres do” = data sporządzenia oceny na piśmie (objaśnienie 7 do wzoru arkusza)
-    review.period_end = review.reviewer_signed_at
+    # „okres do” = data sporządzenia oceny na piśmie (objaśnienie 7 do wzoru arkusza), a gdy ocenę sporządza się
+    # po upływie terminu - data terminu oceny (schemat pól formularza KPRM)
+    review.period_end = min(review.reviewer_signed_at, review.due_date) if review.due_date else review.reviewer_signed_at
+    review.period_end = max(review.period_end, review.period_start)
     if body and body.place:
         review.reviewer_place = body.place
     elif not review.reviewer_place:
         emp = session.get(Employee, review.employee_id)
         office = office_of(session, emp) if emp else None
         review.reviewer_place = office.city if office else ""
+    if review.promotion_request == "tak":
+        emp = session.get(Employee, review.employee_id)
+        notify_hr(session, f"Wniosek o przyznanie kolejnego stopnia służbowego: {emp.full_name if emp else ''}",
+                  f"Oceniający wnioskuje o przyznanie {promotion_target(review) or 'kolejnego'} stopnia służbowego "
+                  "(art. 89 ust. 1 ustawy). Decyzję podejmuje dyrektor generalny urzędu.", f"/reviews/{review.id}")
+        notify_employee(session, review, "Złożono wniosek o przyznanie Ci kolejnego stopnia służbowego",
+                        "Wniosek został dołączony do oceny okresowej (część III arkusza, art. 89 ust. 1 ustawy).")
     if second_negative_risk(session, review):
         emp = session.get(Employee, review.employee_id)
         notify_hr(session, f"Druga z rzędu ocena negatywna urzędnika: {emp.full_name if emp else ''}",
@@ -536,7 +557,18 @@ def finalize(review_id: int, body: PlaceIn | None = None, user: User = Depends(g
     notify_employee(session, review, "Ocena okresowa do zapoznania",
                     "Zapoznaj się z oceną i potwierdź to w systemie. Od oceny przysługuje sprzeciw w terminie 7 dni "
                     "od dnia zapoznania się z nią (art. 83 ust. 1 ustawy o służbie cywilnej).")
-    return _transition(session, review, user, {"discussed"}, "final")
+    if review.status != "discussed":
+        raise HTTPException(409, f"Nie można zmienić statusu z „{review.status}” na „final”")
+    review.status = "final"
+    review.updated_at = utcnow()
+    session.add(review)
+    session.flush()
+    # schemat procesu KPRM: „koniec cyklu oceny i początek następnego” (kryteria w 30 / 7 dni, § 7)
+    nxt = start_next_cycle(session, review)
+    audit(session, user, "status", "review", review.id, status="final", next_review=nxt.id if nxt else None)
+    session.commit()
+    session.refresh(review)
+    return serialize_review(session, review, viewer_is_reviewer=True)
 
 
 @router.post("/reviews/{review_id}/acknowledge")
@@ -549,6 +581,7 @@ def acknowledge(review_id: int, body: PlaceIn | None = None, user: User = Depend
     review.acknowledged_at = date.today()
     review.employee_place = (body.place if body else "") or review.reviewer_place
     notify_reviewer(session, review, "Oceniany zapoznał się z oceną")
+    _notify_obligatory_promotion(session, review)
     return _transition(session, review, user, {"final"}, "acknowledged")
 
 
@@ -565,9 +598,20 @@ def ack_fiction(review_id: int, body: FictionIn, user: User = Depends(get_curren
     review.acknowledged_at = date.today()
     review.ack_fiction = True
     review.ack_fiction_note = body.note
+    _notify_obligatory_promotion(session, review)
     notify_employee(session, review, "Stwierdzono doręczenie oceny okresowej",
                     "Termin 7 dni na sprzeciw biegnie od dnia doręczenia informacji o ocenie.")
     return _transition(session, review, user, {"final"}, "acknowledged", fiction=True)
+
+
+def _notify_obligatory_promotion(session: Session, review: Review) -> None:
+    """Scheduler: weryfikuje warunki obligatoryjnego stopnia (art. 89 ust. 2) i powiadamia kadry."""
+    if obligatory_promotion(session, review):
+        emp = session.get(Employee, review.employee_id)
+        notify_hr(session, f"Obowiązek przyznania kolejnego stopnia służbowego: {emp.full_name if emp else ''}",
+                  "Druga kolejna ocena na jednym z dwóch najwyższych poziomów - stopień przysługuje w terminie 30 dni "
+                  f"od zapoznania z oceną, tj. do {dl.promotion_deadline(review.acknowledged_at).isoformat()} "
+                  "(art. 89 ust. 2 ustawy).", f"/reviews/{review.id}")
 
 
 # ------------------------------------------------------------------ sprzeciw (art. 83)
@@ -595,9 +639,17 @@ def file_objection(review_id: int, body: ObjectionIn, user: User = Depends(get_c
     return _transition(session, review, user, {"acknowledged"}, "objection")
 
 
+class ObjectionChange(BaseModel):
+    criteria: list[CriterionPatch] = Field(default_factory=list)
+    justification: str | None = None
+    ipr_conclusions: str | None = None
+
+
 class ObjectionDecision(BaseModel):
     decision: Literal["odrzucony", "zmiana", "ponowne_sporzadzenie"]
     note: str = ""
+    # przy „zmiana”: zmiany wprowadzane w formularzu przez dyrektora generalnego (art. 83 ust. 4)
+    changes: ObjectionChange | None = None
 
 
 @router.post("/reviews/{review_id}/objection/decision")
@@ -617,14 +669,61 @@ def decide_objection(review_id: int, body: ObjectionDecision, user: User = Depen
     notify_reviewer(session, review, "Rozpatrzono sprzeciw od oceny", labels[body.decision])
     if body.decision == "odrzucony":
         return _transition(session, review, user, {"objection"}, "acknowledged", decision=body.decision)
-    # zmiana oceny albo sporządzenie po raz drugi - nowe podpisy i nowe zapoznanie
+    if body.decision == "zmiana":
+        # schemat procesu KPRM: dyrektor generalny wprowadza zmianę w formularzu oceny
+        ch = body.changes or ObjectionChange()
+        if not ch.criteria and ch.justification is None and ch.ipr_conclusions is None:
+            raise HTTPException(422, "Wprowadź zmiany w formularzu oceny (oceny cząstkowe lub uzasadnienie)")
+        entries = {rc.criterion_id: rc for rc, _ in review_entries(session, review)}
+        before = (review.overall_score, review.result)
+        changed = []
+        for cp in ch.criteria:
+            rc = entries.get(cp.criterion_id)
+            if rc is None:
+                raise HTTPException(422, f"Kryterium {cp.criterion_id} nie należy do tej oceny")
+            if cp.score is not None:
+                if cp.score not in VALID_SCORES:
+                    raise HTTPException(422, "Ocena cząstkowa musi wynosić 1, 3, 5, 7 lub 9 pkt")
+                if rc.score is not None and cp.score < rc.score:
+                    raise HTTPException(422, "Uwzględnienie sprzeciwu oznacza przyznanie racji ocenianemu - nie można "
+                                             "obniżyć oceny ani jej elementów (art. 83 ust. 4, poradnik KPRM rozdz. 7)")
+                if cp.score != rc.score:
+                    changed.append({"criterion_id": cp.criterion_id, "from": rc.score, "to": cp.score})
+                rc.score = cp.score
+            if cp.justification is not None:
+                rc.justification = cp.justification
+            session.add(rc)
+        if ch.justification is not None:
+            review.justification = ch.justification
+        if ch.ipr_conclusions is not None:
+            review.ipr_conclusions = ch.ipr_conclusions
+        recompute(session, review)
+        if before[1] == "pozytywna" and review.result == "negatywna":
+            raise HTTPException(422, "Zmiana oceny po sprzeciwie nie może pogorszyć wyniku ocenianego (art. 83 ust. 4)")
+        if review.result == "negatywna" and not review.justification.strip():
+            raise HTTPException(422, "Ocena negatywna wymaga uzasadnienia (§ 11 ust. 3)")
+        msg =f"Dyrektor generalny zmienił ocenę po uwzględnieniu sprzeciwu. Wynik: {review.result}, {review.overall_level}."
+        notify_employee(session, review, "Ocena okresowa zmieniona po sprzeciwie", msg)
+        notify_reviewer(session, review, "Ocena zmieniona po sprzeciwie", msg)
+        return _transition(session, review, user, {"objection"}, "acknowledged", decision=body.decision, changed=changed)
+    # sporządzenie oceny po raz drugi - powrót do etapu „rozmowa oceniająca i dokonanie oceny”
     review.reviewer_signed_at = None
     review.acknowledged_at = None
     review.ack_fiction = False
-    if body.decision == "zmiana":
-        return _transition(session, review, user, {"objection"}, "discussed", decision=body.decision)
     review.attempt += 1
     review.conversation_date = None
+    # poradnik KPRM rozdz. 7: ocenę po raz drugi sporządza bezpośredni przełożony w terminie 14 dni od wniesienia
+    # sprzeciwu (rozpatrzenie sprzeciwu obejmuje jego wykonanie - art. 83 ust. 3)
+    redo_due = dl.days_deadline(review.objection_at or date.today(), dl.RULES["objection_decision_days"])
+    review.due_date_history = [*review.due_date_history, {
+        "from": review.due_date.isoformat() if review.due_date else None, "date": redo_due.isoformat(),
+        "reason": "sporządzenie oceny po raz drugi po uwzględnieniu sprzeciwu (art. 83 ust. 3-4)",
+        "note": body.note, "at": date.today().isoformat()}]
+    review.due_date = redo_due
+    notify_reviewer(session, review, "Sporządź ocenę po raz drugi",
+                    f"Dyrektor generalny uwzględnił sprzeciw. Przeprowadź ponownie rozmowę oceniającą i sporządź ocenę "
+                    f"do {redo_due.isoformat()} (14 dni od wniesienia sprzeciwu). Przy sprzeciwie ogólnym sam decydujesz, "
+                    "które fragmenty oceny zmienić; oceny nie można obniżyć.")
     return _transition(session, review, user, {"objection"}, "draft", decision=body.decision)
 
 
@@ -729,7 +828,23 @@ def invite_ics(review_id: int, kind: Literal["opening", "assessment", "feedback"
         f"DTSTAMP:{fmt(datetime.now())}", f"DTSTART:{fmt(start)}", f"DTEND:{fmt(end)}",
         f"SUMMARY:{esc(titles[kind] + ' - ' + emp.full_name)}", f"DESCRIPTION:{esc(desc[kind])}",
         "END:VEVENT", "END:VCALENDAR", ""])
+    notify_employee(session, review, titles[kind].split(" (")[0] + " - zaproszenie",
+                    f"Termin: {start.strftime('%d.%m.%Y, godz. %H:%M')}. {desc[kind]}")
     audit(session, user, "invite", "review", review.id, kind=kind)
     session.commit()
     return Response(body, media_type="text/calendar; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="rozmowa-{kind}-{review.id}.ics"'})
+
+
+# ------------------------------------------------------------------ tryb korekty błędów (administrator)
+
+
+@router.get("/reviews/{review_id}/corrections")
+def list_corrections(review_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """Historia korekt błędów wprowadzonych przez administratora (z dziennika zdarzeń) - jawna dla stron oceny."""
+    review = get_review_for(session, user, review_id)
+    rows = session.exec(select(AuditLog).where(AuditLog.entity == "review", AuditLog.entity_id == review.id,
+                                               AuditLog.action == "correction").order_by(AuditLog.created_at.desc())).all()
+    users = {u.id: u.full_name for u in session.exec(select(User)).all()}
+    return [{"at": a.created_at.isoformat(), "by": users.get(a.user_id, "-"), "fields": a.details.get("fields", []),
+             "reason": a.details.get("reason", "")} for a in rows]

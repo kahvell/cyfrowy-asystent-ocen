@@ -9,10 +9,44 @@ import { Button, Card, ErrorBox, Input, Label } from "@/components/ui";
 import { api, setToken } from "@/lib/api";
 import type { Me } from "@/lib/types";
 
+// Konta demonstracyjne (hasło demo123) - każde pokazuje inną część systemu.
 const DEMO = [
-  { email: "kierownik@demo.gov.pl", label: "Przełożony", who: "Marek Zieliński, Wydział Cyfryzacji" },
-  { email: "pracownik@demo.gov.pl", label: "Pracownik", who: "Anna Kowalska" },
-  { email: "hr@demo.gov.pl", label: "HR / Dyrektor generalny", who: "dashboard urzędu" },
+  {
+    email: "kierownik@demo.gov.pl",
+    label: "Przełożony",
+    who: "Marek Zieliński · Wydział Cyfryzacji",
+    hint: "zespół na różnych etapach oceny, przypomnienia, asystent AI, HR partner, IPR",
+  },
+  {
+    email: "pracownik@demo.gov.pl",
+    label: "Pracownik",
+    who: "Anna Kowalska",
+    hint: "samoocena, potwierdzenia, zapoznanie z oceną, sprzeciw, wniosek o zmianę terminu",
+  },
+  {
+    email: "hr@demo.gov.pl",
+    label: "HR / Dyrektor generalny",
+    who: "Iwona Malinowska",
+    hint: "Kadry: pracownicy, zastępstwa, import, zestawienia; sprzeciwy, zatwierdzanie IPR, dashboard",
+  },
+  {
+    email: "admin@demo.gov.pl",
+    label: "Administrator",
+    who: "wszyscy pracownicy",
+    hint: "tryb korekty błędów w arkuszach, pełny dostęp do kadr",
+  },
+  {
+    email: "kierownik.obsluga@demo.gov.pl",
+    label: "Przełożona (zastępstwo)",
+    who: "Ewa Dąbrowska · Obsługa Klienta",
+    hint: "„łagodna” oceniająca na dashboardzie; po wprowadzeniu zastępstwa przejmuje zespół Marka",
+  },
+  {
+    email: "kierownik.finanse@demo.gov.pl",
+    label: "Przełożony (surowy)",
+    who: "Andrzej Krawczyk · Finanse",
+    hint: "„surowy” oceniający w kalibracji; wydział z ocenami negatywnymi",
+  },
 ];
 
 export default function LoginPage() {
@@ -30,7 +64,7 @@ export default function LoginPage() {
     try {
       const res = await api<{ access_token: string; user: Me }>("/auth/login", {
         method: "POST",
-        json: { email: asEmail ?? email, password },
+        json: { email: asEmail ?? email, password: asEmail ? "demo123" : password },
       });
       setToken(res.access_token);
       qc.clear();
@@ -44,7 +78,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <div className="mb-6 flex items-center gap-3">
           <ClipboardList className="h-9 w-9 text-primary" aria-hidden />
           <div>
@@ -68,7 +102,7 @@ export default function LoginPage() {
             </Button>
           </form>
           <div className="mt-6 border-t border-border pt-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Konta demo (hasło: demo123)</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Konta demo · jedno kliknięcie (hasło: demo123)</p>
             <div className="space-y-2">
               {DEMO.map((d) => (
                 <button
@@ -78,10 +112,13 @@ export default function LoginPage() {
                     setEmail(d.email);
                     login(undefined, d.email);
                   }}
-                  className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  className="w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:border-primary hover:bg-slate-50"
                 >
-                  <span className="font-medium">{d.label}</span>
-                  <span className="text-xs text-muted">{d.who}</span>
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{d.label}</span>
+                    <span className="text-xs text-muted">{d.who}</span>
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{d.hint}</span>
                 </button>
               ))}
             </div>

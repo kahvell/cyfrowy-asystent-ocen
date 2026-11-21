@@ -7,10 +7,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { ComparePanel, DraftSuggestion, SourceChip, WarningsList } from "@/components/ai-panels";
 import { ConversationPrep } from "@/components/hr-partner";
-import { CriteriaStage, DeadlinesBar, DeliveryPanel, DueDateRequests, InviteButton, ObservationStage, ProcessStepper, SheetData } from "@/components/process";
+import { AdminCorrection, CriteriaStage, DeadlinesBar, DeliveryPanel, DueDateRequests, InviteButton, ObservationStage, ProcessStepper, SheetData } from "@/components/process";
 import { useMe } from "@/components/app-shell";
 import { NoteItem } from "@/components/notes";
-import { AiWaiting, Badge, Button, Card, CardHeader, ErrorBox, Input, PageTitle, Spinner, Textarea } from "@/components/ui";
+import { AiWaiting, Badge, Button, Card, CardHeader, ErrorBox, FieldLegend, fieldTone, Input, PageTitle, Req, Spinner, Textarea } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { ComparePayload, DraftPayload, Note, Review, ReviewCriterion, Suggestion, Warning } from "@/lib/types";
 import { cn, fmtDate, SCALE, scaleLabel } from "@/lib/utils";
@@ -67,8 +67,8 @@ function CriterionCard({
           ))}
         </ul>
       )}
-      <fieldset className="mt-3" disabled={!editable}>
-        <legend className="sr-only">Ocena cząstkowa</legend>
+      <fieldset className={cn("mt-3 rounded-md", editable && c.score === null && "bg-amber-50 p-1.5 ring-1 ring-amber-400")} disabled={!editable}>
+        <legend className="sr-only">Ocena cząstkowa (obowiązkowa)</legend>
         <div className="grid grid-cols-5 gap-1.5">
           {SCALE.map((s) => (
             <button
@@ -93,6 +93,7 @@ function CriterionCard({
           rows={3}
           value={text}
           readOnly={!editable}
+          className={editable ? fieldTone(false, !text) : undefined}
           onChange={(e) => setText(e.target.value)}
           onBlur={() => text !== c.justification && patch.mutate({ justification: text })}
           placeholder="Uzasadnienie: konkretne zachowania i sytuacje z okresu oceny…"
@@ -171,12 +172,14 @@ function OverallJustification({ review, editable }: { review: Review; editable: 
     <div>
       <label htmlFor="overall" className="mb-1 block text-sm font-medium">
         Uzasadnienie przyznanej oceny {review.summary?.result === "negatywna" ? "(obowiązkowe, § 11 ust. 3)" : "(opcjonalne)"}
+        {review.summary?.result === "negatywna" && <Req />}
       </label>
       <Textarea
         id="overall"
         rows={3}
         value={overall}
         readOnly={!editable}
+        className={editable ? fieldTone(review.summary?.result === "negatywna", !overall.trim()) : undefined}
         onChange={(e) => setOverall(e.target.value)}
         onBlur={() => overall !== review.justification && save.mutate()}
       />
@@ -299,6 +302,7 @@ export default function ReviewPage() {
       />
       <ProcessStepper review={review} />
       <DeadlinesBar review={review} />
+      <AdminCorrection key={review.updated_at} review={review} isAdmin={me?.role === "admin"} />
 
       {review.status === "criteria" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
@@ -326,6 +330,11 @@ export default function ReviewPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
           <div className="space-y-4">
+            {editable && (
+              <Card className="px-5 py-3">
+                <FieldLegend />
+              </Card>
+            )}
             {review.criteria.map((c) => (
               <CriterionCard
                 key={`${c.criterion_id}:${c.justification}`}
@@ -360,7 +369,10 @@ export default function ReviewPage() {
                 <OverallJustification key={review.justification} review={review} editable={editable} />
                 <div>
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-sm font-medium">Wnioski dotyczące IPR (§ 11 ust. 1 pkt 5)</span>
+                    <span className="text-sm font-medium">
+                      Wnioski dotyczące IPR (§ 11 ust. 1 pkt 5)
+                      <Req />
+                    </span>
                     {review.employee.senior_position ? (
                       <Badge tone="slate" title="Art. 108 ust. 1 ustawy o służbie cywilnej">wyższe stanowisko: bez IPR (art. 108)</Badge>
                     ) : review.ipr_id ? (
@@ -376,7 +388,7 @@ export default function ReviewPage() {
                   {review.employee.senior_position ? (
                     <IprConclusions key={review.ipr_conclusions} review={review} editable={editable} />
                   ) : (
-                    <p className="whitespace-pre-line rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+                    <p className={cn("whitespace-pre-line rounded-md p-3 text-sm text-slate-700", review.ipr_conclusions ? "bg-slate-50" : "border border-amber-400 bg-amber-50")}>
                       {review.ipr_conclusions || "Pojawią się po ustaleniu IPR przez przełożonego (art. 108 ustawy)."}
                     </p>
                   )}

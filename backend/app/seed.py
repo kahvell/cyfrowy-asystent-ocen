@@ -31,7 +31,7 @@ from app.models import (
 )
 from app.security import hash_password
 from app.services import deadlines as dl
-from app.services.process import init_deadlines, prefill_previous
+from app.services.process import deadline_base, init_deadlines, prefill_previous
 from app.services.scoring import compute_outcome
 
 SEED_DIR = Path(__file__).resolve().parents[1] / "seed"
@@ -83,7 +83,7 @@ def seed_demo(session: Session) -> None:
         hname, hgender, hpos = dept_def["head"]
         # kierujący wydziałem w urzędzie wojewódzkim - wyższe stanowisko w służbie cywilnej (art. 52 pkt 2)
         head = Employee(full_name=hname, gender=hgender, position=hpos, department_id=dept.id, sheet_type="B",
-                        is_civil_servant=True, senior_position=True,
+                        is_civil_servant=True, senior_position=True, contract_type="mianowanie",
                         position_description=f"Kierowanie komórką: {dept.name}.")
         session.add(head)
         session.flush()
@@ -94,6 +94,7 @@ def seed_demo(session: Session) -> None:
         for name, gender, pos, civil, desc in dept_def["staff"]:
             e = Employee(full_name=name, gender=gender, position=pos, department_id=dept.id, manager_id=head.id,
                          sheet_type="C", is_civil_servant=civil, position_description=desc,
+                         contract_type="mianowanie" if civil else "nieokreslony",
                          employment_start=D.NEW_HIRES.get(name, date(2019, 3, 1)))
             if civil:
                 e.appointment_year, e.civil_grade = rnd.choice([2015, 2017, 2019]), rnd.choice([2, 3, 4])
@@ -177,6 +178,7 @@ def seed_demo(session: Session) -> None:
         session.add(r)
         session.flush()
         init_deadlines(session, r)
+        r.period_start = deadline_base(session, r)
         r.period_end = r.due_date
         if status != "criteria":
             r.opening_conversation_date = date(2024, 12, 10)

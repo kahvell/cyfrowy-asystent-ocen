@@ -16,7 +16,8 @@ const MeContext = createContext<Me | null>(null);
 export const useMe = () => useContext(MeContext);
 
 const NAV: { href: string; label: string; roles: string[]; icon: typeof Users }[] = [
-  { href: "/team", label: "Mój zespół", roles: ["manager", "admin"], icon: Users },
+  { href: "/team", label: "Mój zespół", roles: ["manager"], icon: Users },
+  { href: "/team", label: "Wszyscy pracownicy", roles: ["admin"], icon: Users },
   { href: "/me", label: "Moja ocena i rozwój", roles: ["employee", "manager"], icon: UserRound },
   { href: "/dashboard", label: "Dashboard urzędu", roles: ["hr", "admin"], icon: BarChart3 },
   { href: "/hr", label: "Kadry", roles: ["hr", "admin"], icon: IdCard },

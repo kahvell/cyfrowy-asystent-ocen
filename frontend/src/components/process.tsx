@@ -5,7 +5,7 @@ import { AlertOctagon, CalendarClock, CalendarPlus, CheckCircle2, FileSignature,
 import Link from "next/link";
 import { useState } from "react";
 import { useCriteria } from "@/components/notes";
-import { Badge, Button, Card, CardHeader, ErrorBox, Input, Label, Textarea } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, ErrorBox, FieldLegend, fieldTone, Input, Label, Req, Textarea } from "@/components/ui";
 import { api, ApiError, getToken } from "@/lib/api";
 import type { Review, Warning } from "@/lib/types";
 import { cn, daysTo, fmtDate, SCALE } from "@/lib/utils";
@@ -136,6 +136,11 @@ export function CriteriaStage({ review, isReviewer, isEmployee, onWarnings }: { 
         title="Część I arkusza: kryteria oceny i termin sporządzenia oceny"
         subtitle="§ 5 rozporządzenia: rozmowa rozpoczynająca ocenę - obowiązki z opisu stanowiska, kryteria, oczekiwania i cele."
       />
+      {editable && (
+        <div className="px-5 pt-4">
+          <FieldLegend />
+        </div>
+      )}
       <div className="grid gap-6 p-5 md:grid-cols-2">
         <div>
           <h3 className="mb-2 text-sm font-semibold">Kryteria obowiązkowe (arkusz {review.sheet_type})</h3>
@@ -155,7 +160,7 @@ export function CriteriaStage({ review, isReviewer, isEmployee, onWarnings }: { 
                 disabled={!editable || m.isPending}
                 value={value ?? ""}
                 onChange={(e) => setSlot(i, e.target.value ? Number(e.target.value) : null)}
-                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm disabled:bg-slate-50"
+                className={cn("w-full rounded-md border border-border bg-white px-3 py-2 text-sm disabled:bg-slate-50", editable && fieldTone(false, false))}
               >
                 <option value="">{editable ? "- wybierz albo pozostaw puste -" : "brak"}</option>
                 {options
@@ -171,22 +176,30 @@ export function CriteriaStage({ review, isReviewer, isEmployee, onWarnings }: { 
         </div>
         <div className="space-y-4">
           <div>
-            <Label htmlFor="due">Termin sporządzenia oceny</Label>
+            <Label htmlFor="due">
+              Termin sporządzenia oceny
+              <Req />
+            </Label>
             <Input
               id="due"
               type="date"
               disabled={!editable}
+              className={editable ? fieldTone(true, !review.deadlines.due_date) : undefined}
               defaultValue={review.deadlines.due_date ?? ""}
               onBlur={(e) => e.target.value && e.target.value !== review.deadlines.due_date && m.mutate({ path: "", method: "PATCH", json: { due_date: e.target.value } })}
             />
             <p className="mt-1 text-xs text-muted">Wyliczony: 24 miesiące od początku okresu oceny ({fmtDate(review.period_start)}), z przesunięciem na dzień roboczy i o długie nieobecności.</p>
           </div>
           <div>
-            <Label htmlFor="opening">Data rozmowy rozpoczynającej</Label>
+            <Label htmlFor="opening">
+              Data rozmowy rozpoczynającej
+              <Req />
+            </Label>
             <Input
               id="opening"
               type="date"
               disabled={!editable}
+              className={editable ? fieldTone(true, !review.opening_conversation_date) : undefined}
               defaultValue={review.opening_conversation_date ?? ""}
               onBlur={(e) => e.target.value !== (review.opening_conversation_date ?? "") && m.mutate({ path: "", method: "PATCH", json: { opening_conversation_date: e.target.value || null } })}
             />
@@ -197,6 +210,7 @@ export function CriteriaStage({ review, isReviewer, isEmployee, onWarnings }: { 
               id="opening-notes"
               rows={4}
               readOnly={!editable}
+              className={editable ? fieldTone(false, !notes) : undefined}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               onBlur={() => notes !== review.opening_notes && m.mutate({ path: "", method: "PATCH", json: { opening_notes: notes } })}
@@ -222,7 +236,7 @@ export function CriteriaStage({ review, isReviewer, isEmployee, onWarnings }: { 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {isReviewer && !confirmed && (
             <>
-              <Input value={place} onChange={(e) => setPlace(e.target.value)} className="w-48" aria-label="Miejscowość" placeholder="miejscowość" />
+              <Input value={place} onChange={(e) => setPlace(e.target.value)} className={cn("w-48", fieldTone(true, !place))} aria-label="Miejscowość" placeholder="miejscowość" />
               <Button onClick={() => m.mutate({ path: "/criteria/confirm", json: { place } })} loading={m.isPending}>
                 <FileSignature className="h-4 w-4" aria-hidden /> Potwierdzam rozmowę i wyznaczenie kryteriów
               </Button>
@@ -280,7 +294,13 @@ export function DueDateChange({ review }: { review: Review }) {
       </Button>
       {open && (
         <div className="mt-3 space-y-2 rounded-md border border-border p-3 text-sm">
-          {!review.deadlines.can_change_due_date && <p className="text-amber-800">Zmiana terminu (art. 81 ust. 8) jest możliwa po 6 miesiącach od początku okresu oceny.</p>}
+          {!review.deadlines.can_change_due_date && (
+            <p className="text-amber-800">
+              {review.deadlines.is_repeat_review
+                ? "To ponowna ocena po ocenie negatywnej - termin wynika z art. 81 ust. 9 (po upływie 6 miesięcy od zapoznania) i nie podlega zmianie ani przedłużeniu."
+                : "Zmiana terminu (art. 81 ust. 8) jest możliwa po 6 miesiącach od początku okresu oceny."}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" aria-label="Nowy termin" />
             <select value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Powód zmiany" className="rounded-md border border-border px-2 py-1.5 text-sm">
@@ -382,28 +402,64 @@ export function SheetData({ review, editable }: { review: Review; editable: bool
     <Card>
       <CardHeader title="Pozostałe pola arkusza" subtitle="Uzupełnione automatycznie z bazy - popraw tylko, jeśli dane są niepełne." />
       <div className="space-y-5 p-5 text-sm">
+        {editable && <FieldLegend />}
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Label htmlFor="ps">Okres, w którym oceniany podlegał ocenie: od</Label>
-            <Input id="ps" type="date" disabled={!editable} defaultValue={review.period_start} onBlur={(e) => e.target.value !== review.period_start && patch({ period_start: e.target.value })} />
+            <Label htmlFor="ps">
+              Okres, w którym oceniany podlegał ocenie: od
+              <Req />
+            </Label>
+            <Input id="ps" type="date" disabled={!editable} className={editable ? fieldTone(true, !review.period_start) : undefined} defaultValue={review.period_start} onBlur={(e) => e.target.value !== review.period_start && patch({ period_start: e.target.value })} />
           </div>
           <div>
-            <Label htmlFor="pe">do</Label>
-            <Input id="pe" type="date" disabled={!editable} defaultValue={review.period_end} onBlur={(e) => e.target.value !== review.period_end && patch({ period_end: e.target.value })} />
+            <Label htmlFor="pe">
+              do
+              <Req />
+            </Label>
+            <Input id="pe" type="date" disabled={!editable} className={editable ? fieldTone(true, !review.period_end) : undefined} defaultValue={review.period_end} onBlur={(e) => e.target.value !== review.period_end && patch({ period_end: e.target.value })} />
           </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="sig">Sposób złożenia podpisów</Label>
+            <select
+              id="sig"
+              disabled={!editable}
+              value={review.signature_method ?? "system"}
+              onChange={(e) => patch({ signature_method: e.target.value })}
+              className="w-full rounded-md border border-border bg-white px-2 py-1.5 disabled:bg-slate-50"
+            >
+              <option value="system">potwierdzenie w systemie (z datą i użytkownikiem)</option>
+              <option value="elektroniczny">podpis elektroniczny (kwalifikowany / zaufany / osobisty)</option>
+              <option value="wydruk">na wydruku - podpisy odręczne na papierze</option>
+            </select>
+          </div>
+          {review.sheet_type === "A" && (
+            <div>
+              <Label htmlFor="objb">Pouczenie: sprzeciw służy do (arkusz A)</Label>
+              <Input
+                id="objb"
+                disabled={!editable}
+                defaultValue={review.objection_body ?? ""}
+                placeholder="np. Głównego Lekarza Weterynarii"
+                onBlur={(e) => e.target.value !== (review.objection_body ?? "") && patch({ objection_body: e.target.value || null })}
+              />
+            </div>
+          )}
         </div>
 
         {civil && (
           <fieldset disabled={!editable}>
             <legend className="mb-2 font-semibold">Dane dotyczące poprzedniej oceny okresowej urzędnika służby cywilnej</legend>
             <div className="grid gap-3 sm:grid-cols-3">
-              <select aria-label="Ocena poprzednia" value={review.prev_result ?? ""} onChange={(e) => patch({ prev_result: e.target.value || null })} className="rounded-md border border-border px-2 py-1.5">
+              <select aria-label="Ocena poprzednia" value={review.prev_result ?? ""} onChange={(e) => patch({ prev_result: e.target.value || null })} className={cn("rounded-md border border-border px-2 py-1.5", editable && fieldTone(true, !review.prev_result))}>
                 <option value="">-</option>
                 <option value="pozytywna">pozytywna</option>
                 <option value="negatywna">negatywna</option>
                 <option value="brak">brak</option>
               </select>
-              <select aria-label="Poziom poprzedniej oceny" value={review.prev_level ?? ""} disabled={review.prev_result === "brak"} onChange={(e) => patch({ prev_level: e.target.value || null })} className="rounded-md border border-border px-2 py-1.5">
+              <select aria-label="Poziom poprzedniej oceny" value={review.prev_level ?? ""} disabled={review.prev_result === "brak"} onChange={(e) => patch({ prev_level: e.target.value || null })} className={cn("rounded-md border border-border px-2 py-1.5", editable && review.prev_result !== "brak" && fieldTone(true, !review.prev_level))}>
                 <option value="">-</option>
                 {SCALE.map((s) => (
                   <option key={s.value} value={s.label}>
@@ -411,7 +467,7 @@ export function SheetData({ review, editable }: { review: Review; editable: bool
                   </option>
                 ))}
               </select>
-              <Input type="date" aria-label="Data sporządzenia poprzedniej oceny" disabled={!editable || review.prev_result === "brak"} defaultValue={review.prev_date ?? ""} onBlur={(e) => e.target.value !== (review.prev_date ?? "") && patch({ prev_date: e.target.value || null })} />
+              <Input type="date" aria-label="Data sporządzenia poprzedniej oceny" disabled={!editable || review.prev_result === "brak"} className={editable && review.prev_result !== "brak" ? fieldTone(true, !review.prev_date) : undefined} defaultValue={review.prev_date ?? ""} onBlur={(e) => e.target.value !== (review.prev_date ?? "") && patch({ prev_date: e.target.value || null })} />
             </div>
           </fieldset>
         )}
@@ -452,7 +508,7 @@ export function SheetData({ review, editable }: { review: Review; editable: bool
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <Label htmlFor="ay">Rok mianowania</Label>
-                <select id="ay" value={review.appointment_year ?? ""} onChange={(e) => patch({ appointment_year: Number(e.target.value) || null })} className="w-full rounded-md border border-border px-2 py-1.5">
+                <select id="ay" value={review.appointment_year ?? ""} onChange={(e) => patch({ appointment_year: Number(e.target.value) || null })} className={cn("w-full rounded-md border border-border px-2 py-1.5", fieldTone(true, !review.appointment_year))}>
                   <option value="">-</option>
                   {Array.from({ length: new Date().getFullYear() - 2007 }, (_, i) => 2008 + i).map((y) => (
                     <option key={y}>{y}</option>
@@ -461,18 +517,18 @@ export function SheetData({ review, editable }: { review: Review; editable: bool
               </div>
               <div>
                 <Label htmlFor="cg">Posiadany stopień służbowy</Label>
-                <select id="cg" value={review.civil_grade ?? ""} onChange={(e) => patch({ civil_grade: Number(e.target.value) || null })} className="w-full rounded-md border border-border px-2 py-1.5">
+                <select id="cg" value={review.civil_grade ?? ""} onChange={(e) => patch({ civil_grade: Number(e.target.value) || null })} className={cn("w-full rounded-md border border-border px-2 py-1.5", fieldTone(true, !review.civil_grade))}>
                   <option value="">-</option>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => (
-                    <option key={g} value={g}>
-                      {g}
+                  {["I - pierwszy", "II - drugi", "III - trzeci", "IV - czwarty", "V - piąty", "VI - szósty", "VII - siódmy", "VIII - ósmy", "IX - dziewiąty"].map((label, i) => (
+                    <option key={label} value={i + 1}>
+                      {label}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
                 <Label htmlFor="cgd">Data przyznania stopnia</Label>
-                <Input id="cgd" type="date" defaultValue={review.civil_grade_date ?? ""} onBlur={(e) => patch({ civil_grade_date: e.target.value || null })} />
+                <Input id="cgd" type="date" className={fieldTone(true, !review.civil_grade_date)} defaultValue={review.civil_grade_date ?? ""} onBlur={(e) => patch({ civil_grade_date: e.target.value || null })} />
               </div>
             </div>
             {review.promotion_target && (
@@ -481,8 +537,11 @@ export function SheetData({ review, editable }: { review: Review; editable: bool
               </p>
             )}
             <div>
-              <Label htmlFor="pj">Umotywowanie wniosku (obowiązkowe)</Label>
-              <Textarea id="pj" rows={3} value={just} onChange={(e) => setJust(e.target.value)} onBlur={() => just !== review.promotion_justification && patch({ promotion_justification: just })} />
+              <Label htmlFor="pj">
+                Umotywowanie wniosku
+                <Req />
+              </Label>
+              <Textarea id="pj" rows={3} className={fieldTone(true, !just.trim())} value={just} onChange={(e) => setJust(e.target.value)} onBlur={() => just !== review.promotion_justification && patch({ promotion_justification: just })} />
             </div>
           </fieldset>
         )}
@@ -500,6 +559,7 @@ export function DeliveryPanel({ review, isReviewer, isEmployee, isHr }: { review
   const [objection, setObjection] = useState("");
   const [showFiction, setShowFiction] = useState(false);
   const [showObjection, setShowObjection] = useState(false);
+  const [changing, setChanging] = useState(false);
   const d = review.deadlines;
 
   return (
@@ -581,7 +641,7 @@ export function DeliveryPanel({ review, isReviewer, isEmployee, isHr }: { review
                 <Button size="sm" variant="secondary" onClick={() => m.mutate({ path: "/objection/decision", json: { decision: "odrzucony" } })} loading={m.isPending}>
                   Nie uwzględniam
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => m.mutate({ path: "/objection/decision", json: { decision: "zmiana" } })} loading={m.isPending}>
+                <Button size="sm" variant="secondary" onClick={() => setChanging(!changing)}>
                   <Undo2 className="h-4 w-4" aria-hidden /> Uwzględniam - zmiana oceny
                 </Button>
                 <Button size="sm" variant="secondary" onClick={() => m.mutate({ path: "/objection/decision", json: { decision: "ponowne_sporzadzenie" } })} loading={m.isPending}>
@@ -589,6 +649,7 @@ export function DeliveryPanel({ review, isReviewer, isEmployee, isHr }: { review
                 </Button>
               </div>
             )}
+            {review.status === "objection" && isHr && changing && <ObjectionChangeForm review={review} onSubmit={(changes) => m.mutate({ path: "/objection/decision", json: { decision: "zmiana", changes } })} pending={m.isPending} />}
           </div>
         )}
         <ErrorBox error={m.error} />
@@ -704,10 +765,205 @@ export function DueDateRequests({ review, isReviewer, isEmployee }: { review: Re
             </Button>
           </div>
         ) : (
-          <p className="text-xs text-muted">Wniosek można złożyć po upływie 6 miesięcy od początku okresu oceny.</p>
+          <p className="text-xs text-muted">
+            {review.deadlines.is_repeat_review
+              ? "Termin ponownej oceny po ocenie negatywnej (art. 81 ust. 9) nie podlega zmianie na wniosek."
+              : "Wniosek można złożyć po upływie 6 miesięcy od początku okresu oceny."}
+          </p>
         )
       )}
       <ErrorBox error={create.error || decide.error} />
     </div>
+  );
+}
+
+/** Schemat procesu KPRM: po uwzględnieniu sprzeciwu dyrektor generalny wprowadza zmianę w formularzu oceny. */
+function ObjectionChangeForm({ review, onSubmit, pending }: { review: Review; onSubmit: (changes: unknown) => void; pending: boolean }) {
+  const [scores, setScores] = useState<Record<number, number | null>>(() => Object.fromEntries(review.criteria.map((c) => [c.criterion_id, c.score])));
+  const [just, setJust] = useState(review.justification);
+  const changed = review.criteria.filter((c) => scores[c.criterion_id] !== c.score);
+  return (
+    <div className="mt-3 space-y-3 rounded-md border border-red-200 bg-white p-3 text-sm">
+      <p className="font-medium">Zmiana oceny w formularzu (art. 83 ust. 4) - wprowadza dyrektor generalny</p>
+      <table className="w-full text-xs">
+        <tbody>
+          {review.criteria.map((c) => (
+            <tr key={c.criterion_id} className="border-b border-border">
+              <td className="py-1 pr-2">{c.name}</td>
+              <td className="py-1">
+                <select
+                  aria-label={`Ocena: ${c.name}`}
+                  value={scores[c.criterion_id] ?? ""}
+                  onChange={(e) => setScores({ ...scores, [c.criterion_id]: e.target.value ? Number(e.target.value) : null })}
+                  className={cn("rounded border px-1 py-0.5", scores[c.criterion_id] !== c.score ? "border-amber-500 bg-amber-50" : "border-border")}
+                >
+                  {SCALE.map((sc) => (
+                    <option key={sc.value} value={sc.value}>
+                      {sc.value} - {sc.label}
+                    </option>
+                  ))}
+                </select>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div>
+        <Label htmlFor="dg-just">Uzasadnienie przyznanej oceny</Label>
+        <Textarea id="dg-just" rows={3} value={just} onChange={(e) => setJust(e.target.value)} />
+      </div>
+      <Button
+        size="sm"
+        disabled={changed.length === 0 && just === review.justification}
+        loading={pending}
+        onClick={() =>
+          onSubmit({
+            criteria: changed.map((c) => ({ criterion_id: c.criterion_id, score: scores[c.criterion_id] })),
+            justification: just !== review.justification ? just : undefined,
+          })
+        }
+      >
+        Zatwierdź zmianę oceny i powiadom strony
+      </Button>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ tryb korekty błędów (administrator)
+
+interface Correction {
+  at: string;
+  by: string;
+  fields: string[];
+  reason: string;
+}
+
+const FIELD_LABEL: Record<string, string> = {
+  due_date: "termin sporządzenia oceny",
+  opening_conversation_date: "data rozmowy rozpoczynającej",
+  opening_notes: "ustalenia z rozmowy rozpoczynającej",
+  conversation_date: "data rozmowy oceniającej",
+  period_start: "okres od",
+  period_end: "okres do",
+  justification: "uzasadnienie oceny",
+  ipr_conclusions: "wnioski do IPR",
+  criteria: "oceny cząstkowe",
+  additional_criterion_ids: "kryteria dodatkowe",
+};
+
+/** Schemat pól formularza KPRM: pola zablokowane po etapie można zmienić „wyłącznie w trybie korekty błędów
+ * przez administratora” - z powodem, wpisem w dzienniku zdarzeń i powiadomieniem stron. */
+export function AdminCorrection({ review, isAdmin }: { review: Review; isAdmin: boolean }) {
+  const qc = useQueryClient();
+  const { data: history = [] } = useQuery({ queryKey: ["corrections", review.id], queryFn: () => api<Correction[]>(`/reviews/${review.id}/corrections`) });
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const init = {
+    due_date: review.deadlines.due_date ?? "",
+    opening_conversation_date: review.opening_conversation_date ?? "",
+    conversation_date: review.conversation_date ?? "",
+    period_start: review.period_start,
+    period_end: review.period_end,
+    opening_notes: review.opening_notes,
+    justification: review.justification,
+    ipr_conclusions: review.ipr_conclusions,
+  };
+  const [f, setF] = useState(init);
+  const [scores, setScores] = useState<Record<number, number | null>>(() => Object.fromEntries(review.criteria.map((c) => [c.criterion_id, c.score])));
+  const save = useMutation({
+    mutationFn: () => {
+      const json: Record<string, unknown> = { correction_reason: reason };
+      for (const k of Object.keys(init) as (keyof typeof init)[]) if (f[k] !== init[k]) json[k] = f[k] || null;
+      const changed = review.criteria.filter((c) => scores[c.criterion_id] !== c.score);
+      if (changed.length) json.criteria = changed.map((c) => ({ criterion_id: c.criterion_id, score: scores[c.criterion_id] }));
+      return api<Review>(`/reviews/${review.id}`, { method: "PATCH", json });
+    },
+    onSuccess: (r) => {
+      qc.setQueryData(["review", review.id], r);
+      qc.invalidateQueries({ queryKey: ["corrections", review.id] });
+      setOpen(false);
+      setReason("");
+    },
+  });
+  if (!isAdmin && history.length === 0) return null;
+  const dateField = (k: "due_date" | "opening_conversation_date" | "conversation_date" | "period_start" | "period_end") => (
+    <div key={k}>
+      <Label htmlFor={`corr-${k}`}>{FIELD_LABEL[k]}</Label>
+      <Input id={`corr-${k}`} type="date" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
+    </div>
+  );
+  const changedCount =
+    (Object.keys(init) as (keyof typeof init)[]).filter((k) => f[k] !== init[k]).length + review.criteria.filter((c) => scores[c.criterion_id] !== c.score).length;
+
+  return (
+    <Card className="mb-6 border-slate-300">
+      <div className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
+        <ShieldCheck className="h-4 w-4 text-slate-600" aria-hidden />
+        <span className="font-medium">Korekty błędów w arkuszu</span>
+        <span className="text-muted">{history.length ? `${history.length} w historii` : "brak"}</span>
+        {isAdmin && (
+          <Button size="sm" variant="secondary" className="ml-auto" onClick={() => setOpen(!open)}>
+            Tryb korekty błędów (administrator)
+          </Button>
+        )}
+      </div>
+      {history.length > 0 && (
+        <ul className="space-y-1 border-t border-border px-5 py-3 text-xs text-slate-600">
+          {history.map((h) => (
+            <li key={h.at}>
+              {new Date(h.at + "Z").toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" })} · {h.by} · {h.fields.map((x) => FIELD_LABEL[x] ?? x).join(", ")} ·
+              powód: {h.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && (
+        <div className="space-y-4 border-t border-border px-5 py-4 text-sm">
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">
+            Zmiana pól zablokowanych na obecnym etapie. Korekta jest zapisywana w dzienniku zdarzeń, a oceniany i oceniający dostają powiadomienie.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">{(["due_date", "opening_conversation_date", "conversation_date", "period_start", "period_end"] as const).map(dateField)}</div>
+          <div>
+            <h4 className="mb-1 font-medium">Oceny cząstkowe</h4>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {review.criteria.map((c) => (
+                <label key={c.criterion_id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1">
+                  <span className="text-xs">{c.name}</span>
+                  <select
+                    value={scores[c.criterion_id] ?? ""}
+                    onChange={(e) => setScores({ ...scores, [c.criterion_id]: e.target.value ? Number(e.target.value) : null })}
+                    className="rounded border border-border px-1 py-0.5 text-xs"
+                  >
+                    <option value="">-</option>
+                    {SCALE.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+          </div>
+          {(["opening_notes", "justification", "ipr_conclusions"] as const).map((k) => (
+            <div key={k}>
+              <Label htmlFor={`corr-${k}`}>{FIELD_LABEL[k]}</Label>
+              <Textarea id={`corr-${k}`} rows={2} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
+            </div>
+          ))}
+          <div>
+            <Label htmlFor="corr-reason">
+              Powód korekty
+              <Req />
+            </Label>
+            <Input id="corr-reason" value={reason} onChange={(e) => setReason(e.target.value)} className={fieldTone(true, reason.trim().length < 5)} placeholder="np. błąd pisarski w dacie rozmowy - wg protokołu z 12.06" />
+          </div>
+          <Button onClick={() => save.mutate()} disabled={reason.trim().length < 5 || changedCount === 0} loading={save.isPending}>
+            Zapisz korektę ({changedCount} {changedCount === 1 ? "pole" : "pól"})
+          </Button>
+          <ErrorBox error={save.error} />
+        </div>
+      )}
+    </Card>
   );
 }

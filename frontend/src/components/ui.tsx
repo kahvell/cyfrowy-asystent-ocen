@@ -176,3 +176,30 @@ export function AiWaiting({ active, typical = "30–60 s" }: { active: boolean; 
     </p>
   );
 }
+
+/** Oznaczenie pól jak w arkuszu zautomatyzowanym KPRM: żółte - obowiązkowe (dopóki puste), niebieskie - opcjonalne. */
+export function fieldTone(required: boolean, empty: boolean) {
+  if (required) return empty ? "border-amber-400 bg-amber-50" : "";
+  return "border-sky-200 bg-sky-50/50";
+}
+
+export function FieldLegend() {
+  return (
+    <p className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-3 w-5 rounded-sm border border-amber-400 bg-amber-50" aria-hidden /> pole obowiązkowe (do uzupełnienia)
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-3 w-5 rounded-sm border border-sky-200 bg-sky-50" aria-hidden /> pole opcjonalne
+      </span>
+    </p>
+  );
+}
+
+export function Req() {
+  return (
+    <span className="ml-0.5 text-amber-600" aria-label="pole obowiązkowe" title="pole obowiązkowe">
+      *
+    </span>
+  );
+}

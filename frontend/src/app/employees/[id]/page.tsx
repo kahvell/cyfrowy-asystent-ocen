@@ -32,6 +32,16 @@ function StartReview({ emp }: { emp: EmployeeDetail }) {
     },
   });
   if (!open || emp.reviews.some((r) => r.cycle_id === open.id)) return null;
+  if (emp.contract_type === "okreslony")
+    return (
+      <Card className="p-5 text-sm">
+        <h2 className="mb-1 font-semibold">Nie podlega ocenie okresowej</h2>
+        <p className="text-slate-600">
+          Ocenie okresowej podlegają urzędnicy służby cywilnej i pracownicy zatrudnieni na czas nieokreślony (art. 81 ust. 1 ustawy). Osoba na umowie na czas
+          określony podlega pierwszej ocenie w służbie cywilnej (art. 37-38) - odrębny tryb, poza zakresem systemu.
+        </p>
+      </Card>
+    );
   return (
     <Card>
       <CardHeader title="Rozpocznij cykl oceny okresowej" subtitle={`Dobrany automatycznie wg stanowiska: ${SHEET_INFO[emp.sheet_type] ?? emp.sheet_type}`} />
@@ -40,6 +50,12 @@ function StartReview({ emp }: { emp: EmployeeDetail }) {
           System wyliczy termin wyznaczenia kryteriów (30 dni, a po ocenie negatywnej 7 dni) i termin sporządzenia oceny (24 miesiące, z uwzględnieniem
           nieobecności). Kryteria dodatkowe wybierzesz w części I arkusza.
         </p>
+        {emp.senior_position && (
+          <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-900">
+            Wyższe stanowisko w służbie cywilnej (art. 52): wg poradnika KPRM (rozdz. 3) nie podlega ocenie okresowej z art. 81, dlatego cykl nie startuje
+            automatycznie. Możesz założyć ocenę ręcznie, zgodnie z praktyką urzędu. IPR nie jest wtedy sporządzany (art. 108).
+          </p>
+        )}
         <ErrorBox error={create.error} />
         <Button onClick={() => create.mutate()} loading={create.isPending}>
           <Play className="h-4 w-4" aria-hidden /> Utwórz arkusz {emp.sheet_type}

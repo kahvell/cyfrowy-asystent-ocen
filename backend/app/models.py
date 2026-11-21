@@ -39,6 +39,9 @@ class Employee(SQLModel, table=True):
     # arkusz wg rozporządzenia: A - kierownik urzędu, B - bezpośrednie kierowanie, C - pozostali
     sheet_type: str = "C"
     is_civil_servant: bool = False  # urzędnik (mianowany) vs pracownik służby cywilnej
+    # podstawa zatrudnienia: ocenie okresowej podlegają tylko urzędnicy (mianowanie) i pracownicy na umowie
+    # na czas nieokreślony (art. 81 ust. 1); umowa na czas określony -> pierwsza ocena (art. 37-38)
+    contract_type: str = "nieokreslony"  # mianowanie | nieokreslony | okreslony
     # nawiązanie stosunku pracy na czas nieokreślony / mianowanie - początek pierwszego okresu oceny
     employment_start: date | None = None
     appointment_year: int | None = None  # rok mianowania (urzędnik)
@@ -48,6 +51,18 @@ class Employee(SQLModel, table=True):
     # wyższe stanowisko w służbie cywilnej (art. 52 ustawy) - bez IPR (art. 108 ust. 1)
     senior_position: bool = False
     employment_end: date | None = None
+
+
+class Substitution(SQLModel, table=True):
+    """Zastępstwo przełożonego: w okresie [start, end] zastępca przejmuje zadania oceniającego wobec
+    podwładnych osoby nieobecnej (przypadek użycia „aktualizacja danych o zastępstwach”)."""
+    id: int | None = Field(default=None, primary_key=True)
+    absent_employee_id: int = Field(foreign_key="employee.id", index=True)
+    deputy_employee_id: int = Field(foreign_key="employee.id", index=True)
+    start: date
+    end: date
+    note: str = ""
+    created_at: NaiveDatetime = Field(default_factory=utcnow)
 
 
 class Absence(SQLModel, table=True):
@@ -165,6 +180,10 @@ class Review(SQLModel, table=True):
     objection_decision: str | None = None  # odrzucony | zmiana | ponowne_sporzadzenie
     objection_decided_at: date | None = None
     attempt: int = 1  # 2 = ocena sporządzana po raz drugi po uwzględnieniu sprzeciwu
+    # sposób złożenia podpisów (arkusz zautomatyzowany KPRM: „na wydruku” / „podpis elektroniczny”)
+    signature_method: str = "system"  # system | wydruk | elektroniczny
+    # pouczenie w arkuszu A: organ, do którego służy sprzeciw - wpisuje oceniający (schemat pól arkusza A)
+    objection_body: str | None = None
     overall_score: float | None = None
     overall_level: str | None = None
     result: str | None = None  # pozytywna | negatywna

@@ -82,7 +82,8 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
             open_cycle = session.exec(select(ReviewCycle).where(ReviewCycle.status == "open")).first()
             if open_cycle:
                 has = set(session.exec(select(Review.employee_id).where(Review.cycle_id == open_cycle.id)).all())
-                for e in session.exec(select(Employee).where(Employee.id.in_(team_ids - has))).all():
+                for e in session.exec(select(Employee).where(Employee.id.in_(team_ids - has), Employee.active,
+                                                             Employee.contract_type != "okreslony")).all():
                     out.append(_item("no_review", f"Brak arkusza oceny: {e.full_name}",
                                      "Rozpocznij cykl oceny: wybór arkusza i kryteriów.", None,
                                      f"/employees/{e.id}", today, "info"))
@@ -97,10 +98,13 @@ def reminders_for(session: Session, user: User, today: date | None = None) -> li
                 out.append(_item("acknowledge", "Zapoznaj się z oceną okresową",
                                  "Po zapoznaniu masz 7 dni na ewentualny sprzeciw (art. 83 ust. 1).", None, link, today,
                                  "warning"))
-            elif r.status in ("observation", "draft") and r.due_date and (r.due_date - today).days <= soon                     and not session.exec(select(SelfAssessment).where(SelfAssessment.review_id == r.id,
-                                                                      SelfAssessment.submitted_at.is_not(None))).first():
-                out.append(_item("self_assessment", "Zbliża się ocena okresowa - wypełnij samoocenę",
-                                 "Samoocena pomoże w rozmowie oceniającej.", r.due_date, f"{link}/self", today))
+            elif r.status in ("observation", "draft", "submitted") and r.due_date and (r.due_date - today).days <= soon:
+                sa_done = session.exec(select(SelfAssessment).where(SelfAssessment.review_id == r.id,
+                                                                    SelfAssessment.submitted_at.is_not(None))).first()
+                out.append(_item("review_due_employee", "Zbliża się termin Twojej oceny okresowej",
+                                 "Przełożony zaprosi Cię na rozmowę oceniającą." + (
+                                     "" if sa_done else " Przed rozmową wypełnij samoocenę."),
+                                 r.due_date, link if sa_done else f"{link}/self", today))
             elif r.status == "acknowledged" and r.acknowledged_at:
                 od = dl.objection_deadline(r.acknowledged_at)
                 if today <= od:

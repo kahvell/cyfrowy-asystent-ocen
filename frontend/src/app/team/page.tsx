@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ChevronRight, NotebookPen } from "lucide-react";
 import Link from "next/link";
+import { useMe } from "@/components/app-shell";
 import { RiskBadge, type TeamSignal } from "@/components/hr-partner";
 import { Reminders } from "@/components/reminders";
 import { Badge, Card, ErrorBox, PageTitle, Spinner } from "@/components/ui";
@@ -11,8 +12,14 @@ import type { TeamMember } from "@/lib/types";
 import { fmtDate, STATUS_LABEL, statusTone } from "@/lib/utils";
 
 export default function TeamPage() {
-  const { data, error, isPending } = useQuery({ queryKey: ["team"], queryFn: () => api<TeamMember[]>("/employees?team=mine") });
-  const { data: signals } = useQuery({ queryKey: ["team-hr"], queryFn: () => api<TeamSignal[]>("/team/hr-partner") });
+  const me = useMe();
+  const isAdmin = me?.role === "admin";
+  // administrator widzi wszystkich pracowników (tryb korekty błędów w każdym arkuszu)
+  const { data, error, isPending } = useQuery({
+    queryKey: ["team", isAdmin],
+    queryFn: () => api<TeamMember[]>(`/employees?team=${isAdmin ? "all" : "mine"}`),
+  });
+  const { data: signals } = useQuery({ queryKey: ["team-hr"], queryFn: () => api<TeamSignal[]>("/team/hr-partner"), enabled: me?.role === "manager" });
   const signalOf = (id: number) => signals?.find((s) => s.employee_id === id);
 
   if (isPending) return <Spinner />;
@@ -23,8 +30,12 @@ export default function TeamPage() {
   return (
     <>
       <PageTitle
-        title="Mój zespół"
-        subtitle="Dziennik obserwacji prowadzony przez cały okres oceny chroni przed oceną „z ostatnich dwóch tygodni”."
+        title={isAdmin ? "Wszyscy pracownicy" : "Mój zespół"}
+        subtitle={
+          isAdmin
+            ? "Widok administratora: otwórz arkusz, aby skorzystać z trybu korekty błędów."
+            : "Dziennik obserwacji prowadzony przez cały okres oceny chroni przed oceną „z ostatnich dwóch tygodni”."
+        }
       />
       <Reminders />
       {reminders.length > 0 && (
