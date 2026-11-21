@@ -93,3 +93,31 @@ def test_self_assessment_window_is_stage_2_and_3(client, manager):
             r.status = old
             s.add(r)
             s.commit()
+
+
+def test_development_wheel_shared_with_manager_and_used_in_suggestions(client, manager, employee):
+    """Koło rozwoju: oceniany zaznacza teraz/cel, wybiera obszary i proponuje kryterium; przełożony widzi po udostępnieniu."""
+    rid = _criteria_review(client, manager)
+    jakub = _login(client, "jakub.lewandowski@demo.gov.pl")
+    w = client.get(f"/reviews/{rid}/wheel", headers=jakub).json()
+    assert w["editable"] and w["criteria"] and w["proposable"]
+    cids = [c["criterion_id"] for c in w["criteria"]]
+    proposed = w["proposable"][0]["criterion_id"]
+    body = {"items": {str(c): {"now": 4, "target": 8} for c in cids}, "focus": cids[:2],
+            "proposed_criterion_id": proposed, "note": "Chcę rozwijać się w analizie danych.", "share": False}
+    assert client.put(f"/reviews/{rid}/wheel", headers=jakub, json=body).status_code == 200
+    # przed udostępnieniem przełożony nie widzi treści; inny pracownik w ogóle
+    assert client.get(f"/reviews/{rid}/wheel", headers=manager).json()["shared_at"] is None
+    assert client.get(f"/reviews/{rid}/wheel", headers=manager).json()["items"] == {}
+    assert client.get(f"/reviews/{rid}/wheel", headers=employee).status_code == 403
+    # walidacja: skala 1-10, maks. 2 obszary
+    bad = {**body, "items": {str(cids[0]): {"now": 0, "target": 11}}}
+    assert client.put(f"/reviews/{rid}/wheel", headers=jakub, json=bad).status_code == 422
+    assert client.put(f"/reviews/{rid}/wheel", headers=jakub, json={**body, "focus": cids[:3]}).status_code == 422
+    # udostępnienie -> przełożony widzi koło, a propozycja kryteriów uwzględnia wskazanie pracownika
+    assert client.put(f"/reviews/{rid}/wheel", headers=jakub, json={**body, "share": True}).json()["shared_at"]
+    seen = client.get(f"/reviews/{rid}/wheel", headers=manager).json()
+    assert seen["items"] and seen["proposed_criterion_id"] == proposed and not seen["editable"]
+    p = client.post(f"/reviews/{rid}/ai/suggest-criteria", headers=manager).json()["payload"]
+    assert any(x["criterion_id"] == proposed and any("koło rozwoju" in e for e in x["evidence"])
+               for x in p["proposals"])

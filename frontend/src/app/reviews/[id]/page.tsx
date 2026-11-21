@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { ComparePanel, DraftSuggestion, SourceChip, WarningsList } from "@/components/ai-panels";
 import { CriteriaSuggestPanel, EmployeeOpeningPrep } from "@/components/opening-ai";
+import { DevelopmentWheelEditor, DevelopmentWheelView } from "@/components/wheel";
 import { ConversationPrep } from "@/components/hr-partner";
 import { AdminCorrection, CriteriaStage, DeadlinesBar, DeliveryPanel, DueDateRequests, InviteButton, ObservationStage, ProcessStepper, SheetData, stepLabel } from "@/components/process";
 import { useMe } from "@/components/app-shell";
@@ -347,13 +348,22 @@ export default function ReviewPage() {
           <aside className="space-y-4">
             {warnings && <WarningsList warnings={warnings} review={review} onShowNote={() => {}} onJump={() => {}} />}
             {/* etap I: oceniający dobiera kryteria (dane historyczne), oceniany przygotowuje się do rozmowy o celach */}
+            {/* koło rozwoju: pracownik zaznacza teraz/cel i obszary do pracy; przełożony widzi je po udostępnieniu */}
+            {isReviewer && <DevelopmentWheelView reviewId={review.id} />}
             {isReviewer && viewingCurrent && !review.criteria_reviewer_confirmed_at && <CriteriaSuggestPanel review={review} />}
+            {isEmployee && <DevelopmentWheelEditor reviewId={review.id} />}
             {isEmployee && viewingCurrent && <EmployeeOpeningPrep reviewId={review.id} />}
           </aside>
         </div>
       ) : viewStep === "observation" ? (
-        // etap II: okres oceny - dziennik obserwacji; notatki przełożonego wg metody FUKO (szablon w dzienniku)
-        <ObservationStage review={review} isReviewer={isReviewer} />
+        // etap II: okres oceny - dziennik obserwacji (notatki przełożonego wg metody FUKO) i koło rozwoju
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <ObservationStage review={review} isReviewer={isReviewer} />
+          <aside className="space-y-4">
+            {isReviewer && <DevelopmentWheelView reviewId={review.id} />}
+            {isEmployee && <DevelopmentWheelEditor reviewId={review.id} />}
+          </aside>
+        </div>
       ) : !isReviewer ? (
         <div className="space-y-6">
           <ReadOnlyReview review={review} />
