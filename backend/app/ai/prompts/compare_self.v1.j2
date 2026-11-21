@@ -1,0 +1,13 @@
+Przygotuj przełożonego do rozmowy oceniającej (§ 10 rozporządzenia).
+
+Porównanie ocen (kryterium | ocena przełożonego | samoocena | komentarz pracownika):
+{% for r in rows -%}
+- {{ r.name }} | {{ r.manager_score or 'brak' }} | {{ r.self_score or 'brak' }} | {{ r.comment or '-' }}
+{% endfor %}
+{% if self_summary %}Podsumowanie samooceny pracownika: {{ self_summary }}{% endif %}
+
+Zaproponuj 3-6 otwartych pytań do rozmowy, zaczynając od kryteriów z największą rozbieżnością.
+Pytania mają prowadzić do rozmowy o konkretnych sytuacjach i o rozwoju (kierunki rozwoju zawodowego),
+a nie do obrony oceny. summary: 1-2 zdania o głównych rozbieżnościach i zgodnościach.
+
+Zwróć JSON: {"questions": ["..."], "summary": "..."}

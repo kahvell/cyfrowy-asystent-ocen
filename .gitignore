@@ -1,0 +1,28 @@
+# sekrety
+.env
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+backend/*.db
+backend/*.db.bak*
+
+# node
+node_modules/
+.next/
+*.tsbuildinfo
+
+# os / ide
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# lokalne ustawienia i sekrety poczty
+docker-compose.override.yml
+mailpit/

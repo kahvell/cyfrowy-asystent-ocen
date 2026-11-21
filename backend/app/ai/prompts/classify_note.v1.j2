@@ -1,0 +1,16 @@
+Przypisz notatkę z dziennika obserwacji do kryteriów oceny okresowej i określ jej wydźwięk.
+
+Kryteria (kod: nazwa - opis):
+{% for c in criteria -%}
+- {{ c.code }}: {{ c.name }} - {{ c.indicators | join(' ') }}
+{% endfor %}
+Notatka przełożonego ({{ note_date }}):
+"""{{ note_text }}"""
+
+Zasady:
+- Wybierz od 0 do 3 kryteriów, których notatka RZECZYWIŚCIE dotyczy. Nie dopasowuj na siłę.
+- confidence: 0-1, jak pewne jest przypisanie.
+- sentiment: "positive" (zachowanie pożądane), "negative" (zachowanie wymagające poprawy) lub "neutral".
+- Używaj wyłącznie kodów z listy.
+
+Zwróć JSON: {"criteria": [{"criterion_code": "...", "confidence": 0.8}], "sentiment": "positive"}

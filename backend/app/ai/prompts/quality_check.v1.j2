@@ -1,0 +1,16 @@
+Sprawdź jakość uzasadnień w ocenie okresowej pracownika służby cywilnej.
+
+Ocena (kryterium | ocena cząstkowa w pkt 1-9 | uzasadnienie):
+{% for e in entries -%}
+- {{ e.code }} | {{ e.score if e.score is not none else 'brak' }} | {{ e.justification or '(brak uzasadnienia)' }}
+{% endfor %}
+{% if overall_justification %}Uzasadnienie oceny ogólnej: {{ overall_justification }}{% endif %}
+
+Wskaż wyłącznie realne problemy:
+- "vague": ogólnik, który nie opisuje konkretnego zachowania ani sytuacji (np. "pracuje dobrze").
+- "biased": ocena osoby zamiast zachowań, stereotypy płciowe/wiekowe, odniesienia do zdrowia, rodziny, wyglądu.
+- "inconsistent": treść uzasadnienia nie pasuje do liczby punktów (np. krytyczny tekst przy 9 pkt).
+excerpt: dokładny cytat z uzasadnienia. suggestion: jak przeformułować.
+Jeśli nie ma problemów, zwróć pustą listę.
+
+Zwróć JSON: {"issues": [{"criterion_code": "...", "kind": "vague", "excerpt": "...", "explanation": "...", "suggestion": "..."}]}

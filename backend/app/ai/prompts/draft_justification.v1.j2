@@ -1,0 +1,22 @@
+Przygotuj PROPOZYCJĘ uzasadnienia oceny cząstkowej dla kryterium „{{ criterion.name }}”.
+
+Wskaźniki behawioralne kryterium wg rozporządzenia:
+{% for i in criterion.indicators -%}
+- {{ i }}
+{% endfor %}
+Okres oceny: {{ period_start }} - {{ period_end }}.
+Oceniany: {{ employee_name }}, stanowisko: {{ position }}.
+
+Notatki z dziennika obserwacji (jedyne dopuszczalne źródło faktów):
+{% for n in notes -%}
+[id={{ n.id }}] {{ n.date }} ({{ n.sentiment or 'brak oceny' }}{% if n.source == 'self' %}, wpis pracownika{% endif %}): {{ n.text }}
+{% endfor %}
+Zasady:
+- Napisz 2-5 zdań w 3. osobie, rzeczowo, opisując ZACHOWANIA i ich EFEKTY, nie cechy osobowości.
+- Każde zdanie MUSI wskazywać w "source_note_ids" identyfikatory notatek, na których się opiera. Nie wymyślaj faktów spoza notatek.
+- Wpisy pracownika (osiągnięcia zgłoszone przez niego) przytaczaj jako zgłoszone przez pracownika.
+- Uwzględnij cały okres oceny, nie tylko ostatnie tygodnie; wspomnij też o obszarach do poprawy, jeśli wynikają z notatek.
+- proposed_score: jedna z wartości 1, 3, 5, 7, 9 (1 znacznie poniżej, 3 poniżej, 5 na poziomie, 7 powyżej, 9 znacznie powyżej oczekiwań).
+- rationale: jedno zdanie, dlaczego taki poziom.
+
+Zwróć JSON: {"sentences": [{"text": "...", "source_note_ids": [1, 2]}], "proposed_score": 7, "rationale": "..."}

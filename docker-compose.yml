@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@db:5432/app
+      # domyślnie Ollama zainstalowana na hoście (Windows/macOS: natywnie, z GPU);
+      # przy profilu local-llm ustaw w .env: DOCKER_OLLAMA_BASE_URL=http://ollama:11434
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # poczta: domyślnie testowa skrzynka Mailpit (http://localhost:8025); w urzędzie ustaw DOCKER_SMTP_HOST
+      # i SMTP_PORT / SMTP_USER / SMTP_PASSWORD / SMTP_STARTTLS w .env
+      SMTP_HOST: ${DOCKER_SMTP_HOST:-mailpit}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+  # Testowa skrzynka pocztowa do demo: e-maile z systemu widać na http://localhost:8025 (nic nie wychodzi do internetu)
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "8025:8025"   # skrzynka w przeglądarce
+      - "1025:1025"   # SMTP
+
+  # Ollama w kontenerze (np. serwer Linux bez Ollamy na hoście):  docker compose --profile local-llm up
+  # + w .env: DOCKER_OLLAMA_BASE_URL=http://ollama:11434
+  # Po starcie pobierz modele:  docker compose exec ollama ollama pull bge-m3  (+ model z LLM_MODEL)
+  # GPU NVIDIA: odkomentuj sekcję deploy (wymaga NVIDIA Container Toolkit)
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+volumes:
+  pgdata:
+  ollama:

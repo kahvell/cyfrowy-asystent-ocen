@@ -1,0 +1,13 @@
+Odpowiedz na pytanie przełożonego dotyczące ocen okresowych w służbie cywilnej,
+WYŁĄCZNIE na podstawie poniższych fragmentów przepisów. Jeśli odpowiedzi w nich nie ma, powiedz to wprost.
+
+Fragmenty:
+{% for ch in chunks -%}
+[{{ ch.ref }}] {{ ch.text }}
+{% endfor %}
+Pytanie: {{ question }}
+
+answer: zwięzła odpowiedź (max 6 zdań) z odwołaniem do jednostek redakcyjnych (np. § 11 ust. 3).
+citations: lista użytych oznaczeń fragmentów, dokładnie tak jak w nawiasach kwadratowych.
+
+Zwróć JSON: {"answer": "...", "citations": ["§ 11"]}

@@ -1,0 +1,175 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, GraduationCap, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useState } from "react";
+import { useMe } from "@/components/app-shell";
+import { useCriteria } from "@/components/notes";
+import { AiLabel, Badge, Button, Card, ErrorBox, Input, Label, PageTitle, Spinner, Textarea } from "@/components/ui";
+import { api } from "@/lib/api";
+import type { IPR, IPRGoal, Training } from "@/lib/types";
+import { fmtDate, modelLabel } from "@/lib/utils";
+
+export default function IPRPage() {
+  const { id } = useParams<{ id: string }>();
+  const iprId = Number(id);
+  const { data: ipr, error, isPending } = useQuery({ queryKey: ["ipr", iprId], queryFn: () => api<IPR>(`/ipr/${iprId}`) });
+  if (isPending) return <Spinner />;
+  if (error) return <ErrorBox error={error} />;
+  return <IPRForm key={`${ipr.status}:${ipr.ai?.prompt_version}:${ipr.goals.length}`} ipr={ipr} />;
+}
+
+function IPRForm({ ipr }: { ipr: IPR }) {
+  const iprId = ipr.id;
+  const me = useMe();
+  const qc = useQueryClient();
+  const { data: trainings } = useQuery({ queryKey: ["trainings"], queryFn: () => api<Training[]>("/trainings"), staleTime: Infinity });
+  const { data: criteria } = useCriteria();
+  const [summary, setSummary] = useState(ipr.summary);
+  const [goals, setGoals] = useState<IPRGoal[]>(ipr.goals);
+
+  const save = useMutation({
+    mutationFn: (approve: boolean) =>
+      api<IPR>(`/ipr/${iprId}`, {
+        method: "PATCH",
+        json: {
+          summary,
+          goals: goals.map((g) => ({
+            criterion_id: g.criterion_id,
+            goal: g.goal,
+            actions: g.actions,
+            success_measure: g.success_measure,
+            deadline: g.deadline,
+            training_id: g.training?.id ?? null,
+          })),
+          status: approve ? "approved" : undefined,
+        },
+      }),
+    onSuccess: (r) => {
+      qc.setQueryData(["ipr", iprId], r);
+      qc.invalidateQueries({ queryKey: ["review", r.review_id] });
+    },
+  });
+
+  const editable = ipr.status === "draft" && me?.role !== "employee" && me?.employee_id !== ipr.employee.id;
+  const upd = (i: number, patch: Partial<IPRGoal>) => setGoals((gs) => gs.map((g, j) => (j === i ? { ...g, ...patch } : g)));
+
+  return (
+    <>
+      <PageTitle
+        title={
+          <span className="flex items-center gap-2">
+            <GraduationCap className="h-6 w-6 text-primary" aria-hidden /> Indywidualny Program Rozwoju Zawodowego
+          </span>
+        }
+        subtitle={`${ipr.employee.full_name} · ${ipr.employee.position}`}
+        action={
+          <div className="flex items-center gap-2">
+            {ipr.status === "approved" ? <Badge tone="green">zatwierdzony {fmtDate(ipr.approved_at)}</Badge> : <Badge tone="amber">projekt</Badge>}
+            {ipr.ai && <AiLabel model={modelLabel(ipr.ai.model)} />}
+          </div>
+        }
+      />
+      <div className="space-y-4">
+        <Card className="p-5">
+          <Label htmlFor="summary">Kierunki rozwoju zawodowego</Label>
+          <Textarea id="summary" rows={3} readOnly={!editable} value={summary} onChange={(e) => setSummary(e.target.value)} />
+        </Card>
+        {goals.map((g, i) => (
+          <Card key={i} className="space-y-3 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">{i + 1}</span>
+                {editable ? (
+                  <select
+                    className="rounded-md border border-border px-2 py-1 text-sm"
+                    value={g.criterion_id ?? ""}
+                    onChange={(e) => upd(i, { criterion_id: e.target.value ? Number(e.target.value) : null })}
+                    aria-label="Kryterium"
+                  >
+                    <option value="">(bez kryterium)</option>
+                    {criteria?.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Badge tone="blue">{g.criterion_name ?? "cel ogólny"}</Badge>
+                )}
+              </div>
+              {editable && (
+                <Button size="sm" variant="danger" onClick={() => setGoals(goals.filter((_, j) => j !== i))}>
+                  <Trash2 className="h-4 w-4" aria-hidden /> Usuń cel
+                </Button>
+              )}
+            </div>
+            <div>
+              <Label>Cel rozwojowy</Label>
+              <Textarea rows={2} readOnly={!editable} value={g.goal} onChange={(e) => upd(i, { goal: e.target.value })} />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <Label>Działania</Label>
+                <Textarea rows={3} readOnly={!editable} value={g.actions} onChange={(e) => upd(i, { actions: e.target.value })} />
+              </div>
+              <div>
+                <Label>Miernik sukcesu</Label>
+                <Textarea rows={3} readOnly={!editable} value={g.success_measure} onChange={(e) => upd(i, { success_measure: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <Label>Termin</Label>
+                <Input type="date" readOnly={!editable} value={g.deadline ?? ""} onChange={(e) => upd(i, { deadline: e.target.value || null })} />
+              </div>
+              <div>
+                <Label>Szkolenie z katalogu</Label>
+                {editable ? (
+                  <select
+                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                    value={g.training?.id ?? ""}
+                    onChange={(e) => upd(i, { training: trainings?.find((t) => t.id === Number(e.target.value)) ?? null })}
+                  >
+                    <option value="">(brak)</option>
+                    {trainings?.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.code} · {t.title} ({t.hours} h)
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-sm">{g.training ? `${g.training.title} (${g.training.hours} h, ${g.training.format})` : "—"}</p>
+                )}
+              </div>
+            </div>
+          </Card>
+        ))}
+        {editable && (
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setGoals([...goals, { criterion_id: null, goal: "", actions: "", success_measure: "", deadline: null, training: null }])}
+            >
+              <Plus className="h-4 w-4" aria-hidden /> Dodaj cel
+            </Button>
+            <ErrorBox error={save.error} />
+            <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+              <Button variant="secondary" onClick={() => save.mutate(false)} loading={save.isPending}>
+                Zapisz projekt
+              </Button>
+              <Button onClick={() => save.mutate(true)} loading={save.isPending}>
+                <CheckCircle2 className="h-4 w-4" aria-hidden /> Zatwierdź IPR i wpisz wnioski do arkusza
+              </Button>
+            </div>
+          </>
+        )}
+        <Link href={`/reviews/${ipr.review_id}`} className="inline-block text-sm text-primary hover:underline">
+          ← wróć do oceny
+        </Link>
+      </div>
+    </>
+  );
+}

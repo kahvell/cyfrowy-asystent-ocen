@@ -1,0 +1,23 @@
+{
+  "note": "Przykładowy (fikcyjny) katalog szkoleń urzędu. W urzędzie zastępowany planem szkoleń / ofertą KSAP.",
+  "trainings": [
+    {"code": "SZK-KOM-01", "title": "Prosty język w pismach urzędowych", "criterion_codes": ["KOMUNIKACJA"], "format": "warsztat stacjonarny", "hours": 12, "description": "Redagowanie pism zrozumiałych dla obywatela; zasady prostego języka."},
+    {"code": "SZK-KOM-02", "title": "Komunikacja interpersonalna i aktywne słuchanie", "criterion_codes": ["KOMUNIKACJA", "WSPOLPRACA"], "format": "warsztat stacjonarny", "hours": 8, "description": "Techniki aktywnego słuchania, parafraza, udzielanie informacji zwrotnej."},
+    {"code": "SZK-ORG-01", "title": "Zarządzanie czasem i priorytetami", "criterion_codes": ["ORGANIZACJA_PRACY"], "format": "e-learning + webinar", "hours": 6, "description": "Macierz Eisenhowera, planowanie tygodniowe, praca z zaległościami."},
+    {"code": "SZK-ORG-02", "title": "Podstawy zarządzania projektami w administracji", "criterion_codes": ["ORGANIZACJA_PRACY", "ZARZADZANIE_STRATEGICZNE"], "format": "szkolenie stacjonarne", "hours": 16, "description": "Harmonogram, kamienie milowe, ryzyka; projekty finansowane ze środków UE."},
+    {"code": "SZK-RZT-01", "title": "Kodeks postępowania administracyjnego w praktyce", "criterion_codes": ["RZETELNOSC", "WIEDZA"], "format": "szkolenie stacjonarne", "hours": 14, "description": "Terminy, doręczenia, najczęstsze błędy proceduralne."},
+    {"code": "SZK-RZT-02", "title": "Kontrola jakości i samokontrola dokumentów", "criterion_codes": ["RZETELNOSC"], "format": "warsztat", "hours": 4, "description": "Listy kontrolne, zasada czterech oczu, praca z szablonami."},
+    {"code": "SZK-WSP-01", "title": "Współpraca w zespole i między komórkami", "criterion_codes": ["WSPOLPRACA"], "format": "warsztat stacjonarny", "hours": 8, "description": "Przepływ informacji, role w zespole, rozwiązywanie napięć."},
+    {"code": "SZK-WIE-01", "title": "Nowelizacje przepisów - przegląd półroczny", "criterion_codes": ["WIEDZA"], "format": "webinar", "hours": 3, "description": "Cykl webinarów o zmianach prawa w obszarze działania urzędu."},
+    {"code": "SZK-WIE-02", "title": "Excel i analiza danych dla administracji", "criterion_codes": ["WIEDZA", "MYSLENIE_ANALITYCZNE"], "format": "e-learning", "hours": 10, "description": "Tabele przestawne, Power Query, wizualizacja danych."},
+    {"code": "SZK-ANL-01", "title": "Myślenie analityczne i wnioskowanie z danych", "criterion_codes": ["MYSLENIE_ANALITYCZNE"], "format": "warsztat", "hours": 8, "description": "Struktura problemu, analiza przyczyn, formułowanie rekomendacji."},
+    {"code": "SZK-KLI-01", "title": "Standardy obsługi klienta urzędu", "criterion_codes": ["ORIENTACJA_NA_KLIENTA", "KOMUNIKACJA"], "format": "warsztat stacjonarny", "hours": 8, "description": "Obsługa trudnego interesanta, dostępność, obsługa osób z niepełnosprawnościami."},
+    {"code": "SZK-KRE-01", "title": "Design thinking w usługach publicznych", "criterion_codes": ["KREATYWNOSC"], "format": "warsztat", "hours": 12, "description": "Projektowanie usług z perspektywy obywatela; prototypowanie."},
+    {"code": "SZK-NEG-01", "title": "Negocjacje w zamówieniach i uzgodnieniach międzyresortowych", "criterion_codes": ["NEGOCJOWANIE"], "format": "warsztat", "hours": 12, "description": "Przygotowanie stanowiska negocjacyjnego, BATNA, techniki."},
+    {"code": "SZK-WYS-01", "title": "Wystąpienia publiczne i prezentacje", "criterion_codes": ["WYSTAPIENIA", "KOMUNIKACJA"], "format": "warsztat z nagraniem wideo", "hours": 12, "description": "Struktura wystąpienia, praca z głosem, trudne pytania."},
+    {"code": "SZK-KRY-01", "title": "Zarządzanie kryzysowe i ciągłość działania", "criterion_codes": ["KRYZYS", "DECYZJE"], "format": "ćwiczenia sztabowe", "hours": 8, "description": "Procedury, komunikacja kryzysowa, wnioski po incydencie."},
+    {"code": "SZK-DEC-01", "title": "Podejmowanie decyzji w warunkach niepewności", "criterion_codes": ["DECYZJE"], "format": "warsztat", "hours": 8, "description": "Analiza wariantów i ryzyka, odpowiedzialność za decyzje."},
+    {"code": "SZK-ZL-01", "title": "Akademia kierownika: delegowanie i informacja zwrotna", "criterion_codes": ["ZARZADZANIE_LUDZMI"], "format": "program rozwojowy (3 moduły)", "hours": 24, "description": "Delegowanie, motywowanie, rozmowy rozwojowe, rozwiązywanie konfliktów."},
+    {"code": "SZK-ZS-01", "title": "Planowanie strategiczne w administracji rządowej", "criterion_codes": ["ZARZADZANIE_STRATEGICZNE"], "format": "szkolenie stacjonarne", "hours": 16, "description": "Od strategii do celów operacyjnych; analiza ryzyka strategicznego."}
+  ]
+}
