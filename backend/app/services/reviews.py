@@ -74,6 +74,7 @@ def serialize_note(note: Note, tags: list[NoteCriterion], crit_by_id: dict[int, 
         "text": note.text,
         "sentiment": note.sentiment,
         "source": note.source,
+        "shared_with_employee": note.shared_with_employee,
         "classified": note.classified,
         "criteria": [
             {
@@ -163,6 +164,7 @@ def serialize_review(session: Session, review: Review, *, viewer_is_reviewer: bo
         **form_people(session, review),
         "attempt": review.attempt,
         "assessment_invited_at": iso(review.assessment_invited_at),
+        "assessment_confirmed_at": iso(review.assessment_confirmed_at),
         "opening_conversation_date": iso(review.opening_conversation_date),
         "opening_notes": review.opening_notes,
         "criteria_reviewer_confirmed_at": iso(review.criteria_reviewer_confirmed_at),

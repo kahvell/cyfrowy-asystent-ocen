@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, BookOpen, ClipboardList, IdCard, LogOut, ShieldCheck, Users, UserRound } from "lucide-react";
+import { BarChart3, BookOpen, ClipboardList, IdCard, LogOut, ShieldCheck, TrendingUp, Users, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, use, useContext, useEffect, type ReactNode } from "react";
@@ -18,6 +18,7 @@ export const useMe = () => useContext(MeContext);
 const NAV: { href: string; label: string; roles: string[]; icon: typeof Users }[] = [
   { href: "/team", label: "Mój zespół", roles: ["manager"], icon: Users },
   { href: "/team", label: "Wszyscy pracownicy", roles: ["admin"], icon: Users },
+  { href: "/stats", label: "Statystyki ocen", roles: ["manager", "admin"], icon: TrendingUp },
   { href: "/me", label: "Moja ocena i rozwój", roles: ["employee", "manager"], icon: UserRound },
   { href: "/dashboard", label: "Dashboard urzędu", roles: ["hr"], icon: BarChart3 },
   { href: "/hr", label: "Kadry", roles: ["hr", "admin"], icon: IdCard },

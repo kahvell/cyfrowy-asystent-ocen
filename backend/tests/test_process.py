@@ -3,7 +3,10 @@
 from datetime import date
 
 import pytest
+from sqlmodel import Session
 
+from app.db import engine
+from app.models import Review
 from app.services import deadlines as dl
 
 
@@ -14,6 +17,12 @@ def _team(client, h):
 def _review_of(client, h, name):
     team = _team(client, h)
     return team[name]["current_review"]["id"]
+
+
+def _login(client, email, password="demo123"):
+    r = client.post("/auth/login", json={"email": email, "password": password})
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
 def test_stage_one_criteria_and_confirmations(client, manager):
@@ -180,14 +189,41 @@ def test_calendar_invite(client, manager):
     assert "BEGIN:VEVENT" in r.text and "DTSTART:20261201T100000" in r.text
 
 
-def test_assessment_invite_unlocks_stage_four(client, manager):
-    """Przed odblokowaniem pól etapu „Rozmowa oceniająca” trzeba umówić rozmowę - zaproszenie (.ics) zapisuje
-    datę `assessment_invited_at`, na której opiera się odblokowanie."""
-    rid = _review_of(client, manager, "Anna Kowalska")
+def test_assessment_invite_unlocks_stage_four(client, hr, manager):
+    """Etap IV („Rozmowa oceniająca”): zaproszenie (.ics) zapisuje termin, ale pola etapu odblokowuje dopiero
+    potwierdzenie tego terminu przez ocenianego (§ 10). Bez potwierdzenia nie można stwierdzić odbycia rozmowy."""
+    struct = client.get("/admin/structure", headers=hr).json()
+    zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
+    e = client.post("/admin/employees", headers=hr, json={
+        "full_name": "Ryszard Rozmowny", "position": "Inspektor", "department_id": struct["departments"][0]["id"],
+        "manager_id": zielinski["id"], "employment_start": "2019-01-02",
+        "email": "ryszard.rozmowny@demo.gov.pl"}).json()
+    rid = e["review_started"]
+    employee = _login(client, "ryszard.rozmowny@demo.gov.pl", e["initial_password"])
+    with Session(engine) as s:  # kryteria (etap I) potwierdzone - arkusz w okresie obserwacji
+        r = s.get(Review, rid)
+        r.opening_conversation_date = r.criteria_reviewer_confirmed_at = r.criteria_employee_confirmed_at = date(2019, 1, 10)
+        r.status = "observation"
+        s.add(r)
+        s.commit()
+    assert client.post(f"/reviews/{rid}/start", headers=manager).status_code == 200
+    rev = client.get(f"/reviews/{rid}", headers=manager).json()
+    crits = [{"criterion_id": c["criterion_id"], "score": 5, "justification": "Zgodnie z oczekiwaniami."}
+             for c in rev["criteria"]]
+    assert client.patch(f"/reviews/{rid}", headers=manager, json={
+        "criteria": crits, "ipr_conclusions": "Rozwój kompetencji."}).status_code == 200
+    assert client.post(f"/reviews/{rid}/submit", headers=manager).status_code == 200
+
     assert client.get(f"/reviews/{rid}", headers=manager).json()["assessment_invited_at"] is None
-    r = client.get(f"/reviews/{rid}/invite.ics?kind=assessment&when=2026-12-05T10:00", headers=manager)
-    assert r.status_code == 200
+    # bez zaproszenia i potwierdzenia nie można stwierdzić odbycia rozmowy
+    assert client.post(f"/reviews/{rid}/discussed", headers=manager,
+                       json={"conversation_date": date.today().isoformat()}).status_code == 409
+    assert client.get(f"/reviews/{rid}/invite.ics?kind=assessment&when=2026-12-05T10:00", headers=manager).status_code == 200
     assert client.get(f"/reviews/{rid}", headers=manager).json()["assessment_invited_at"] is not None
+    # termin potwierdza wyłącznie oceniany - dopiero to odblokowuje etap IV
+    assert client.post(f"/reviews/{rid}/assessment/confirm", headers=manager).status_code == 403
+    assert client.post(f"/reviews/{rid}/assessment/confirm", headers=employee).status_code == 200
+    assert client.get(f"/reviews/{rid}", headers=manager).json()["assessment_confirmed_at"] is not None
 
 
 def test_period_from_is_criteria_acknowledgement_date(client, manager):

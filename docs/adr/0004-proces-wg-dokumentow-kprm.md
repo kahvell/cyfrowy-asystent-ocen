@@ -8,6 +8,8 @@ Materiały KPRM do wyzwania (przypadki użycia, warunki brzegowe, „schemat pó
 ## Decyzja
 - Statusy oceny: `criteria → observation → draft → submitted → discussed → final → acknowledged`, plus `objection`.
 - Każde pole arkusza ma określony etap edycji (`CRITERIA_FIELDS`, `EVALUATION_FIELDS` w `services/process.py`). Poza nim backend odrzuca zmianę (409) z komunikatem o trybie korekty przez administratora.
+- Bramki potwierdzenia drugiej strony występują na etapach I (kryteria, `criteria`), IV (rozmowa oceniająca, `submitted`) i VI (zapoznanie, `final`): dopiero potwierdzenie zamyka etap i blokuje jego pola. Pola etapu IV odblokowuje zaproszenie `.ics` (`assessment_invited_at`) potwierdzone przez ocenianego (`assessment_confirmed_at`).
+- Samo przejście przez etap bez bramki (np. II → III) nie blokuje powrotu: przełożony może kliknąć wcześniejszy etap i go poprawić, przy czym status procesu się nie zmienia, a przypisanie edytowalności rozstrzyga bieżący status arkusza, nie oglądany etap.
 - Terminy liczy kod według materiału KPRM; wszystkie stałe są w `RULES`, więc zmiana przepisów to zmiana konfiguracji.
 - Podpis to potwierdzenie w systemie (data, miejscowość, użytkownik w `audit_log`). Integracja z podpisem kwalifikowanym lub EZD jest punktem rozszerzenia.
 - Zgodnie ze schematem procesu (BPMN) cykl startuje automatycznie: po wprowadzeniu pracownika przez kadry i po sporządzeniu każdej oceny („koniec cyklu oceny i początek następnego”). Zmianę oceny po uwzględnieniu sprzeciwu wprowadza dyrektor generalny w formularzu; sporządzenie po raz drugi wraca do oceniającego.

@@ -163,7 +163,7 @@ Zasady: **nigdy `docker compose down -v`** (flaga `-v` usuwa wolumen `pgdata`, c
 - **Przejrzystość:** treści AI są oznaczone w UI razem z nazwą modelu. Jeśli model był niedostępny i zadziałały reguły, UI też to pokazuje.
 - **Śledzalność:** zdania uzasadnienia wskazują notatki źródłowe, a identyfikatory spoza przekazanych notatek są odrzucane w kodzie.
 - **Suwerenność danych:** tryb `local` (Ollama) jest domyślny. W trybie `external` imiona i nazwiska (z odmianą), PESEL, e-mail i telefon są zastępowane tokenami przed wysłaniem.
-- **Dostęp:** przełożony widzi tylko bezpośrednich podwładnych, pracownik widzi notatki o sobie (art. 15 RODO), HR widzi wyłącznie agregaty z k-anonimowością. Autoryzację sprawdza backend.
+- **Dostęp:** przełożony widzi tylko bezpośrednich podwładnych, HR widzi wyłącznie agregaty z k-anonimowością. Notatki naczelnika są domyślnie niejawne - pracownik widzi własne wpisy oraz notatki przełożonego, które ten udostępnił mu wprost (przycisk „Udostępnij podwładnemu”). Autoryzację sprawdza backend.
 - **Dostępność:** semantyczny HTML, `aria-*`, widoczny focus, etykiety pól (WCAG 2.1 AA jako cel).
 
 ## Testy

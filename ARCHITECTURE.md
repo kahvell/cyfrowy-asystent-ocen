@@ -134,8 +134,8 @@ cyfrowy-asystent-ocen/
 
 | Rola | Może |
 |------|------|
-| `employee` | zobaczyć swoje oceny i IPR, wypełnić samoocenę, dodać własne osiągnięcia do dziennika |
-| `manager` | prowadzić dziennik obserwacji podwładnych, tworzyć i edytować ocenę, korzystać z asystenta AI, zatwierdzać IPR |
+| `employee` | zobaczyć swoje oceny i IPR, wypełnić samoocenę, dodać własne osiągnięcia do dziennika, zobaczyć notatki przełożonego udostępnione mu wprost |
+| `manager` | prowadzić dziennik obserwacji podwładnych (notatki domyślnie niejawne), udostępniać notatki podwładnemu, tworzyć i edytować ocenę, korzystać z asystenta AI, zatwierdzać IPR |
 | `hr` | dashboard całego urzędu (zagregowany, bez treści notatek), zarządzanie kryteriami i katalogiem szkoleń |
 | `admin` | użytkownicy, struktura organizacyjna |
 
@@ -359,7 +359,7 @@ Terminy liczy `services/deadlines.py` (miesiące z końcem miesiąca, dni od zda
 | Ekran | Rola | Zawartość |
 |-------|------|-----------|
 | **Mój zespół** | manager | lista podwładnych, liczba notatek, status oceny, przypomnienia („brak notatek od 3 mies.”) |
-| **Dziennik obserwacji** | manager / employee | szybkie dodawanie notatki (1 pole + data), tagi kryteriów od AI do poprawienia |
+| **Dziennik obserwacji** | manager / employee | szybkie dodawanie notatki (1 pole + data), tagi kryteriów od AI do poprawienia; notatki naczelnika domyślnie niejawne, z przyciskiem „Udostępnij podwładnemu” |
 | **Arkusz oceny** | manager | kryteria po lewej, po prawej panel AI: szkic, dowody (klikalne notatki), ostrzeżenia jakości |
 | **Samoocena** | employee | to samo, w uproszczeniu |
 | **Przygotowanie do rozmowy** | manager | rozbieżności samoocena vs ocena + pytania |
@@ -454,5 +454,5 @@ Zaimplementowane etapy 0–7 z sekcji 13. Odstępstwa od pierwotnego planu (uzas
 | — | panel Kadry (`/admin/*`): pracownicy, podległość = zmiana oceniającego, nieobecności przeliczające termin, ustanie zatrudnienia | przypadki użycia „ogólne” z materiałów KPRM |
 | — | powiadomienia w systemie + SMTP, `python -m app.services.notify digest` z crona | „przypominać o terminach”, integracja z pocztą |
 | — | wniosek ocenianego o zmianę terminu, tryb korekty administratora (`correction_reason`) | przypadki użycia KPRM |
-| — | klikalny pasek etapów oceny: etapy przeszłe do wglądu (tylko odczyt), bieżący edytowalny, przyszłe zablokowane; pola etapu „Rozmowa oceniająca” (status `submitted`) odblokowuje zaproszenie `.ics` (`assessment_invited_at`) | schemat procesu KPRM: przełożony musi móc wrócić do wcześniejszych etapów, a rozmowę oceniającą trzeba najpierw umówić |
+| — | klikalny pasek etapów oceny: etapy przeszłe do wglądu, bieżący edytowalny, przyszłe zablokowane; bramki potwierdzenia drugiej strony na etapach 1 (`criteria`), 4 (`submitted`) i 6 (`final`) zamykają etap i blokują jego pola, a wcześniejszy etap bez bramki (np. 2, `observation`) wolno poprawić bez zmiany statusu procesu; pola etapu „Rozmowa oceniająca” odblokowuje zaproszenie `.ics` (`assessment_invited_at`) potwierdzone przez ocenianego (`assessment_confirmed_at`) | schemat procesu KPRM: przełożony musi móc wrócić do wcześniejszych etapów, a rozmowę oceniającą trzeba najpierw umówić i potwierdzić |
 | instalator natywny dla Windows | kontenery OCI + `start.ps1` + `scripts/backup-postgres.ps1`; zmiany kryteriów migracją danych, nie seedem | licencja Dockera rozwiązywana Podmanem, a seed wypełnia tylko puste tabele (ADR 0005) |

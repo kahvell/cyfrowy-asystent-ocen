@@ -116,6 +116,7 @@ class Note(SQLModel, table=True):
     text: str = Field(sa_type=Text)
     sentiment: str | None = None  # positive | neutral | negative
     source: str = "manager"  # manager | self
+    shared_with_employee: bool = False  # notatka przełożonego niejawna, dopóki nie zostanie udostępniona
     classified: bool = False
     created_at: NaiveDatetime = Field(default_factory=utcnow)
 
@@ -196,6 +197,9 @@ class Review(SQLModel, table=True):
     # moment wysłania zaproszenia (.ics) na rozmowę oceniającą; do tego czasu pola etapu „Rozmowa oceniająca”
     # pozostają zablokowane (rozmowę trzeba najpierw umówić)
     assessment_invited_at: NaiveDatetime | None = None
+    # potwierdzenie przez ocenianego terminu rozmowy oceniającej (bramka etapu IV) - dopiero ono odblokowuje
+    # ustalenie daty rozmowy i stwierdzenie jej odbycia (§ 10)
+    assessment_confirmed_at: NaiveDatetime | None = None
 
 
 class ReviewCriterion(SQLModel, table=True):

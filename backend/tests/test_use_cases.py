@@ -121,6 +121,10 @@ def test_promotion_request_notifies_hr(client, hr, admin_h=None):
         "criteria": crits, "justification": "Bardzo dobre wyniki.", "ipr_conclusions": "Rozwój w analityce.",
         "promotion_request": "tak", "civil_grade": 3, "promotion_justification": "Wybitne wyniki w okresie oceny."})
     client.post(f"/reviews/{rid}/submit", headers=adm)
+    # etap IV: zaproszenie (.ics) i potwierdzenie terminu rozmowy przez ocenianego (§ 10)
+    magda = _login(client, "magdalena.kaminska@demo.gov.pl")
+    assert client.get(f"/reviews/{rid}/invite.ics?kind=assessment&when=2026-12-05T10:00", headers=adm).status_code == 200
+    assert client.post(f"/reviews/{rid}/assessment/confirm", headers=magda).status_code == 200
     client.post(f"/reviews/{rid}/discussed", headers=adm, json={"conversation_date": date.today().isoformat()})
     fin = client.post(f"/reviews/{rid}/finalize", headers=adm)
     assert fin.status_code == 200, fin.text

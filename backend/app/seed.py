@@ -31,7 +31,7 @@ from app.models import (
 )
 from app.security import hash_password
 from app.services import deadlines as dl
-from app.services.process import deadline_base, init_deadlines, prefill_previous
+from app.services.process import init_deadlines, prefill_previous
 from app.services.scoring import compute_outcome
 
 SEED_DIR = Path(__file__).resolve().parents[1] / "seed"
@@ -222,8 +222,12 @@ def seed_demo(session: Session) -> None:
         session.add(r)
         session.flush()
         init_deadlines(session, r)
-        r.period_start = deadline_base(session, r)
-        r.period_end = r.due_date
+        # okres oceny w danych demo obejmuje pełne dwa lata cyklu (2024-12-01 – 2026-11-30), a nie wąski odcinek
+        # liczony od dnia zatrudnienia; gdy umowę zawarto w trakcie cyklu, okres biegnie od zatrudnienia do terminu
+        if e.employment_start and e.employment_start > cur.period_start:
+            r.period_start, r.period_end = e.employment_start, r.due_date
+        else:
+            r.period_start, r.period_end = cur.period_start, cur.period_end
         if status != "criteria":
             r.opening_conversation_date = date(2024, 12, 10)
             r.opening_notes = D.OPENING_NOTES.get(e.full_name, "")

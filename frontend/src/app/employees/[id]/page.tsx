@@ -86,10 +86,10 @@ export default function EmployeePage() {
           {isManager && (
             <Card className="p-5">
               <h2 className="mb-3 text-base font-semibold">Dodaj obserwację</h2>
-              <NoteComposer employeeId={empId} />
+              <NoteComposer employeeId={empId} managerView />
             </Card>
           )}
-          <NotesList employeeId={empId} canEdit={isManager} myUserId={me?.id} />
+          <NotesList employeeId={empId} canEdit={isManager} canShare={isManager} myUserId={me?.id} />
         </div>
         <div className="space-y-6">
           <Card>

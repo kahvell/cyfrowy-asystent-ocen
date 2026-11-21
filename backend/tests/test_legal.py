@@ -21,6 +21,12 @@ def _emps(client, hr):
     return {e["full_name"]: e for e in client.get("/admin/employees", headers=hr).json()}
 
 
+def _login(client, email, password="demo123"):
+    r = client.post("/auth/login", json={"email": email, "password": password})
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
 def test_art71_second_negative_for_civil_servant(client):
     with Session(engine) as s:
         emp = s.exec(select(Employee).where(Employee.is_civil_servant, Employee.manager_id.is_not(None))).first()
@@ -191,6 +197,7 @@ def test_late_review_period_end_is_due_date(client, hr, manager):
         "manager_id": zielinski["id"], "employment_start": "2019-01-02",
         "email": "piotr.spozniony@demo.gov.pl"}).json()
     rid = e["review_started"]
+    employee = _login(client, "piotr.spozniony@demo.gov.pl", e["initial_password"])
     due = client.get(f"/reviews/{rid}", headers=manager).json()["deadlines"]["due_date"]
     assert due < date.today().isoformat()  # ocena po terminie
     with Session(engine) as s:  # rozmowa i potwierdzenia jak po stronie ocenianego
@@ -205,6 +212,9 @@ def test_late_review_period_end_is_due_date(client, hr, manager):
     assert client.patch(f"/reviews/{rid}", headers=manager, json={
         "criteria": crits, "ipr_conclusions": "Rozwój.", "signature_method": "wydruk"}).status_code == 200
     client.post(f"/reviews/{rid}/submit", headers=manager)
+    # etap IV: zaproszenie (.ics) i potwierdzenie terminu rozmowy przez ocenianego (§ 10)
+    assert client.get(f"/reviews/{rid}/invite.ics?kind=assessment&when=2026-12-05T10:00", headers=manager).status_code == 200
+    assert client.post(f"/reviews/{rid}/assessment/confirm", headers=employee).status_code == 200
     client.post(f"/reviews/{rid}/discussed", headers=manager, json={"conversation_date": date.today().isoformat()})
     fin = client.post(f"/reviews/{rid}/finalize", headers=manager).json()
     assert fin["period_end"] == due and fin["reviewer_signed_at"] == date.today().isoformat()

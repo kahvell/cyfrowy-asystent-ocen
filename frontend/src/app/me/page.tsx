@@ -37,7 +37,7 @@ export default function MyPage() {
           <NotesList employeeId={emp.id} canEdit={false} myUserId={me?.id} />
         </div>
         <Card>
-          <CardHeader title="Moje oceny okresowe" subtitle="Notatki o Tobie są dla Ciebie widoczne - przejrzystość to podstawa zaufania." />
+          <CardHeader title="Moje oceny okresowe" subtitle="Twoje wpisy w dzienniku widzi przełożony. Notatki przełożonego zobaczysz, gdy zdecyduje się je udostępnić." />
           <ul className="divide-y divide-border">
             {emp.reviews.length === 0 && <li className="px-5 py-3 text-sm text-muted">Brak ocen.</li>}
             {emp.reviews.map((r) => (

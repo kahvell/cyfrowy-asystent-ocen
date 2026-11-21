@@ -39,6 +39,7 @@ from app.services.process import (
     EVALUATION_FIELDS,
     EVALUATION_STATUSES,
     deadline_base,
+    editable_fields,
     is_repeat_review,
     obligatory_promotion,
     office_of,
@@ -208,12 +209,8 @@ def patch_review(review_id: int, body: ReviewPatch, user: User = Depends(get_cur
     correction = user.role == "admin" and bool(body.correction_reason)
     if correction:
         allowed = CRITERIA_FIELDS | EVALUATION_FIELDS
-    elif review.status == "criteria" and review.criteria_reviewer_confirmed_at is None:
-        allowed = CRITERIA_FIELDS
-    elif review.status in ("draft", "discussed"):
-        allowed = EVALUATION_FIELDS
     else:
-        allowed = set()
+        allowed = editable_fields(review)
     blocked = sent - allowed
     if blocked:
         raise HTTPException(409, f"Na etapie „{review.status}” tych pól nie można zmieniać: {', '.join(sorted(blocked))}. "
@@ -507,11 +504,37 @@ class DiscussedIn(BaseModel):
     conversation_date: date
 
 
+@router.post("/reviews/{review_id}/assessment/confirm")
+def confirm_assessment_term(review_id: int, user: User = Depends(get_current_user),
+                            session: Session = Depends(get_session)):
+    """Oceniany potwierdza termin rozmowy oceniającej - bramka odblokowująca pola etapu IV (§ 10)."""
+    review = get_review_for(session, user, review_id)
+    if user.employee_id != review.employee_id:
+        raise HTTPException(403, "Termin rozmowy oceniającej potwierdza oceniany")
+    if review.status != "submitted":
+        raise HTTPException(409, "Termin rozmowy oceniającej potwierdza się przed rozmową (§ 10)")
+    if not review.assessment_invited_at:
+        raise HTTPException(409, "Oceniający nie zaprosił jeszcze na rozmowę oceniającą")
+    review.assessment_confirmed_at = utcnow()
+    session.add(review)
+    notify_reviewer(session, review, "Oceniany potwierdził termin rozmowy oceniającej")
+    audit(session, user, "confirm_assessment_term", "review", review.id)
+    session.commit()
+    session.refresh(review)
+    return serialize_review(session, review, viewer_is_reviewer=False)
+
+
 @router.post("/reviews/{review_id}/discussed")
 def mark_discussed(review_id: int, body: DiscussedIn, user: User = Depends(get_current_user),
                    session: Session = Depends(get_session)):
-    """Rozmowa oceniająca przeprowadzona (§ 10). Oceniający może jeszcze skorygować ocenę (§ 11 ust. 2)."""
+    """Rozmowa oceniająca przeprowadzona (§ 10). Oceniający może jeszcze skorygować ocenę (§ 11 ust. 2).
+
+    Pola etapu „Rozmowa oceniająca” odblokowuje umówienie rozmowy (zaproszenie .ics) potwierdzone przez ocenianego.
+    """
     review = get_review_for(session, user, review_id, manage=True)
+    if not review.assessment_confirmed_at:
+        raise HTTPException(409, "Najpierw umów rozmowę oceniającą (zaproszenie .ics) i poczekaj na potwierdzenie "
+                                 "terminu przez ocenianego (§ 10).")
     review.conversation_date = body.conversation_date
     return _transition(session, review, user, {"submitted"}, "discussed")
 
@@ -648,7 +671,17 @@ def file_objection(review_id: int, body: ObjectionIn, user: User = Depends(get_c
     review = get_review_for(session, user, review_id)
     if user.employee_id != review.employee_id:
         raise HTTPException(403, "Sprzeciw wnosi oceniany")
-    if not review.acknowledged_at or date.today() > dl.objection_deadline(review.acknowledged_at):
+    if review.status not in ("final", "acknowledged"):
+        raise HTTPException(409, f"Sprzeciw wnosi się na etapie zapoznania z oceną (obecny status: „{review.status}”)")
+    # Termin 7 dni biegnie od rzeczywistego zapoznania się z oceną - potwierdzonego przez ocenianego albo
+    # w trybie fikcji zapoznania. Gdy oceniany wnosi sprzeciw bezpośrednio z etapu zapoznania (bez wcześniejszego
+    # potwierdzenia), zapoznanie następuje w chwili wniesienia sprzeciwu i dopiero wtedy rusza zegar terminu
+    # (art. 83 ust. 1). Nieobecność pracownika przed zapoznaniem nie uruchamia terminu; po zapoznaniu biegnie on
+    # nieprzerwanie, a gdy koniec wypada w dzień wolny - przesuwa się na najbliższy dzień roboczy (liczenie terminów).
+    if review.acknowledged_at is None:
+        review.acknowledged_at = date.today()
+        review.employee_place = review.employee_place or review.reviewer_place
+    elif date.today() > dl.objection_deadline(review.acknowledged_at):
         raise HTTPException(409, "Minął termin 7 dni od zapoznania się z oceną (art. 83 ust. 1)")
     review.objection_at = date.today()
     review.objection_text = body.text
@@ -657,7 +690,7 @@ def file_objection(review_id: int, body: ObjectionIn, user: User = Depends(get_c
     notify_hr(session, f"Sprzeciw od oceny okresowej: {emp.full_name if emp else ''}",
               "Sprzeciw rozpatruje się w terminie 14 dni od dnia wniesienia (art. 83 ust. 3).", f"/reviews/{review.id}")
     notify_reviewer(session, review, "Wniesiono sprzeciw od oceny")
-    return _transition(session, review, user, {"acknowledged"}, "objection")
+    return _transition(session, review, user, {"final", "acknowledged"}, "objection")
 
 
 class ObjectionChange(BaseModel):

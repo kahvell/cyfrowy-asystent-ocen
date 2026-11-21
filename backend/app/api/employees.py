@@ -108,6 +108,9 @@ def list_notes(
 ):
     ensure_employee_access(session, user, employee_id)
     notes = employee_notes(session, employee_id, date_from, date_to)
+    if not is_manager_of(session, user, employee_id):
+        # pracownik widzi swoje notatki oraz te notatki przełożonego, które zostały mu udostępnione
+        notes = [n for n in notes if n.source == "self" or n.shared_with_employee]
     tags = note_tags(session, [n.id for n in notes])
     if criterion_id:
         notes = [n for n in notes if any(t.criterion_id == criterion_id for t in tags.get(n.id, []))]
@@ -157,6 +160,10 @@ class NoteCriteriaIn(BaseModel):
     criterion_ids: list[int]
 
 
+class NoteShareIn(BaseModel):
+    shared: bool = True
+
+
 @router.patch("/notes/{note_id}/criteria")
 def set_note_criteria(note_id: int, body: NoteCriteriaIn, user: User = Depends(get_current_user),
                       session: Session = Depends(get_session)):
@@ -173,6 +180,28 @@ def set_note_criteria(note_id: int, body: NoteCriteriaIn, user: User = Depends(g
     note.classified = True
     session.add(note)
     audit(session, user, "retag", "note", note_id, criterion_ids=body.criterion_ids)
+    session.commit()
+    crit = {c.id: c for c in session.exec(select(Criterion)).all()}
+    return serialize_note(note, note_tags(session, [note_id]).get(note_id, []), crit)
+
+
+@router.patch("/notes/{note_id}/share")
+def share_note(note_id: int, body: NoteShareIn, user: User = Depends(get_current_user),
+               session: Session = Depends(get_session)):
+    """Udostępnia (lub cofa udostępnienie) notatkę przełożonego pracownikowi.
+
+    Notatki naczelnika są domyślnie niejawne - widzi je tylko przełożony, dopóki nie zdecyduje
+    się jej udostępnić podwładnemu."""
+    note = session.get(Note, note_id)
+    if note is None:
+        raise HTTPException(404, "Nie ma takiej notatki")
+    if note.source != "manager":
+        raise HTTPException(422, "Udostępnić można tylko notatkę przełożonego")
+    if note.author_id != user.id and not is_manager_of(session, user, note.employee_id):
+        raise HTTPException(403, "Brak uprawnień do udostępnienia tej notatki")
+    note.shared_with_employee = body.shared
+    session.add(note)
+    audit(session, user, "share" if body.shared else "unshare", "note", note_id, employee_id=note.employee_id)
     session.commit()
     crit = {c.id: c for c in session.exec(select(Criterion)).all()}
     return serialize_note(note, note_tags(session, [note_id]).get(note_id, []), crit)

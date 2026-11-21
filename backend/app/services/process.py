@@ -33,6 +33,30 @@ EVALUATION_FIELDS = {"criteria", "justification", "ipr_conclusions", "conversati
                      "signature_method", "objection_body"}
 EVALUATION_STATUSES = {"draft", "submitted", "discussed"}
 
+# Etapy bramkowane potwierdzeniem przez ocenianego: 1. kryteria, 4. rozmowa oceniająca, 6. zapoznanie z oceną.
+# Dopiero potwierdzenie na bramce zamyka etap. Przejście przez etap bez potwierdzenia drugiej strony
+# (np. „okres oceny” -> „przygotowanie oceny”) nie blokuje powrotu i zmian w etapie wcześniejszym.
+GATE_STAGES = ("criteria", "submitted", "final")
+
+
+def editable_fields(review: Review) -> set[str]:
+    """Pola arkusza edytowalne przez oceniającego przy bieżącym statusie (poza trybem korekty administratora).
+
+    Etap I zamyka potwierdzenie wyznaczenia kryteriów przez oceniającego. Etapy „przygotowanie oceny”
+    i „ocena na piśmie” (III i V) są edytowalne - a wraz z nimi etap IV, dopóki oceniany nie potwierdził
+    terminu rozmowy. Blokady nie powoduje samo przejście do kolejnego etapu bez potwierdzenia drugiej strony.
+    """
+    allowed: set[str] = set()
+    if review.status == "criteria" and review.criteria_reviewer_confirmed_at is None:
+        allowed |= CRITERIA_FIELDS
+    if review.status in ("draft", "discussed"):
+        allowed |= EVALUATION_FIELDS
+    elif review.status == "submitted" and not review.assessment_confirmed_at:
+        # treść oceny (etap III) pozostaje otwarta do czasu potwierdzenia terminu rozmowy przez ocenianego;
+        # samą datę rozmowy ustala się z chwilą jej odbycia (endpoint /discussed)
+        allowed |= EVALUATION_FIELDS - {"conversation_date"}
+    return allowed
+
 
 def absences(session: Session, employee_id: int) -> list[dl.Period]:
     rows = session.exec(select(Absence).where(Absence.employee_id == employee_id)).all()

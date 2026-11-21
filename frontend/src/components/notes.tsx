@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { Lock, Pencil, Plus, Share2, Sparkles, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import type { Criterion, Note } from "@/lib/types";
@@ -12,7 +12,7 @@ export function useCriteria() {
   return useQuery({ queryKey: ["criteria"], queryFn: () => api<Criterion[]>("/criteria"), staleTime: Infinity });
 }
 
-export function NoteComposer({ employeeId, placeholder }: { employeeId: number; placeholder?: string }) {
+export function NoteComposer({ employeeId, placeholder, managerView }: { employeeId: number; placeholder?: string; managerView?: boolean }) {
   const qc = useQueryClient();
   const [text, setText] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -48,6 +48,11 @@ export function NoteComposer({ employeeId, placeholder }: { employeeId: number; 
           <Sparkles className="inline h-3 w-3 text-ai" aria-hidden /> AI przypisze kryteria i wydźwięk - możesz je poprawić.
         </span>
       </div>
+      {managerView && (
+        <p className="text-xs text-muted">
+          <Lock className="inline h-3 w-3" aria-hidden /> Notatka jest domyślnie niejawna - pracownik jej nie zobaczy, dopóki nie użyjesz „Udostępnij podwładnemu”.
+        </p>
+      )}
       <ErrorBox error={add.error} />
     </form>
   );
@@ -97,11 +102,15 @@ function TagEditor({ note, onDone }: { note: Note; onDone: () => void }) {
   );
 }
 
-export function NoteItem({ note, highlighted, canEdit, canDelete }: { note: Note; highlighted?: boolean; canEdit?: boolean; canDelete?: boolean }) {
+export function NoteItem({ note, highlighted, canEdit, canDelete, canShare }: { note: Note; highlighted?: boolean; canEdit?: boolean; canDelete?: boolean; canShare?: boolean }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const del = useMutation({
     mutationFn: () => api(`/notes/${note.id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes", note.employee_id] }),
+  });
+  const share = useMutation({
+    mutationFn: (shared: boolean) => api<Note>(`/notes/${note.id}/share`, { method: "PATCH", json: { shared } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notes", note.employee_id] }),
   });
   return (
@@ -110,6 +119,8 @@ export function NoteItem({ note, highlighted, canEdit, canDelete }: { note: Note
         <span className="font-medium text-slate-700">{fmtDate(note.date)}</span>
         <Sentiment value={note.classified ? note.sentiment : null} />
         {note.source === "self" && <Badge tone="blue">od pracownika</Badge>}
+        {note.source === "manager" && note.shared_with_employee && <Badge tone="green">udostępniona podwładnemu</Badge>}
+        {note.source === "manager" && !note.shared_with_employee && canShare && <Badge tone="slate">niejawne</Badge>}
         <span>#{note.id}</span>
         {note.author_name && <span>· {note.author_name}</span>}
       </div>
@@ -131,6 +142,16 @@ export function NoteItem({ note, highlighted, canEdit, canDelete }: { note: Note
             <Pencil className="h-3 w-3" aria-hidden /> popraw kryteria
           </button>
         )}
+        {canShare && note.source === "manager" && (
+          <button
+            onClick={() => share.mutate(!note.shared_with_employee)}
+            disabled={share.isPending}
+            className="ml-1 inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+          >
+            <Share2 className="h-3 w-3" aria-hidden />
+            {note.shared_with_employee ? "cofnij udostępnienie" : "udostępnij podwładnemu"}
+          </button>
+        )}
         {canDelete && (
           <button
             onClick={() => confirm("Usunąć notatkę?") && del.mutate()}
@@ -148,11 +169,13 @@ export function NoteItem({ note, highlighted, canEdit, canDelete }: { note: Note
 export function NotesList({
   employeeId,
   canEdit,
+  canShare,
   myUserId,
   criterionFilter,
 }: {
   employeeId: number;
   canEdit: boolean;
+  canShare?: boolean;
   myUserId?: number;
   criterionFilter?: number | null;
 }) {
@@ -204,7 +227,15 @@ export function NotesList({
       ) : (
         <ul className="divide-y divide-border">
           {notes.map((n) => (
-            <NoteItem key={n.id} note={n} canEdit={canEdit} canDelete={!!myUserId && n.author_id === myUserId} />
+            <NoteItem
+              key={n.id}
+              note={n}
+              // autor swojej notatki może poprawić etykiety kryteriów (np. przypisane przez AI),
+              // tak samo jak może ją usunąć - niezależnie od tego, czy jest przełożonym
+              canEdit={canEdit || (!!myUserId && n.author_id === myUserId)}
+              canDelete={!!myUserId && n.author_id === myUserId}
+              canShare={canShare}
+            />
           ))}
         </ul>
       )}

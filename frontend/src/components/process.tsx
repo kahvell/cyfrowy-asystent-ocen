@@ -366,6 +366,9 @@ export function DueDateChange({ review }: { review: Review }) {
 
 export function ObservationStage({ review, isReviewer }: { review: Review; isReviewer: boolean }) {
   const m = useReviewMutation(review.id);
+  // etap 2 nie ma bramki potwierdzenia - powrót do niego nie zmienia statusu, ale samo przejście
+  // do etapu 3 („Rozpocznij przygotowanie oceny”) wykonuje się tylko wtedy, gdy arkusz jest w etapie 2
+  const atObservation = review.status === "observation";
   return (
     <Card>
       <CardHeader
@@ -399,9 +402,11 @@ export function ObservationStage({ review, isReviewer }: { review: Review; isRev
                 <Link href={`/employees/${review.employee.id}`}>
                   <Button variant="secondary">Dziennik obserwacji</Button>
                 </Link>
-                <Button onClick={() => m.mutate({ path: "/start" })} loading={m.isPending}>
-                  <Scale className="h-4 w-4" aria-hidden /> Rozpocznij przygotowanie oceny
-                </Button>
+                {atObservation && (
+                  <Button onClick={() => m.mutate({ path: "/start" })} loading={m.isPending}>
+                    <Scale className="h-4 w-4" aria-hidden /> Rozpocznij przygotowanie oceny
+                  </Button>
+                )}
               </div>
               <InviteButton reviewId={review.id} kind="feedback" label="Zaproś na rozmowę z informacją zwrotną" />
               <DueDateChange review={review} />
@@ -587,9 +592,7 @@ export function SheetData({ review, editable }: { review: Review; editable: bool
 export function DeliveryPanel({ review, isReviewer, isEmployee, isHr }: { review: Review; isReviewer: boolean; isEmployee: boolean; isHr: boolean }) {
   const m = useReviewMutation(review.id);
   const [fiction, setFiction] = useState("");
-  const [objection, setObjection] = useState("");
   const [showFiction, setShowFiction] = useState(false);
-  const [showObjection, setShowObjection] = useState(false);
   const [changing, setChanging] = useState(false);
   const d = review.deadlines;
 
@@ -611,9 +614,17 @@ export function DeliveryPanel({ review, isReviewer, isEmployee, isHr }: { review
         {review.status === "final" && isEmployee && (
           <div className="rounded-md border border-primary/30 bg-blue-50 p-4">
             <p className="mb-3">Przeprowadzono ze mną rozmowę oceniającą oraz zapoznałem(-łam) się z oceną okresową i wnioskami dotyczącymi indywidualnego programu rozwoju zawodowego.</p>
-            <Button onClick={() => m.mutate({ path: "/acknowledge", json: { place: review.reviewer_place } })} loading={m.isPending}>
-              <FileSignature className="h-4 w-4" aria-hidden /> Potwierdzam zapoznanie z oceną
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => m.mutate({ path: "/acknowledge", json: { place: review.reviewer_place } })} loading={m.isPending}>
+                <FileSignature className="h-4 w-4" aria-hidden /> Potwierdzam zapoznanie z oceną
+              </Button>
+              <Link href={`/reviews/${review.id}/objection`}>
+                <Button variant="secondary">
+                  <Gavel className="h-4 w-4" aria-hidden /> Nie akceptuję - złóż sprzeciw
+                </Button>
+              </Link>
+            </div>
+            <p className="mt-2 text-xs text-slate-600">Odmowa zapoznania uruchomi procedurę sprzeciwu (7 dni od zapoznania, art. 83 ustawy o służbie cywilnej).</p>
           </div>
         )}
         {review.status === "final" && isReviewer && (
@@ -639,19 +650,11 @@ export function DeliveryPanel({ review, isReviewer, isEmployee, isHr }: { review
         </p>
 
         {d.objection_open && isEmployee && (
-          <div>
-            <Button size="sm" variant="secondary" onClick={() => setShowObjection(!showObjection)}>
+          <Link href={`/reviews/${review.id}/objection`}>
+            <Button size="sm" variant="secondary">
               <Gavel className="h-4 w-4" aria-hidden /> Wnieś sprzeciw (do {fmtDate(d.objection_deadline)})
             </Button>
-            {showObjection && (
-              <div className="mt-2 space-y-2">
-                <Textarea rows={3} value={objection} onChange={(e) => setObjection(e.target.value)} placeholder="Uzasadnienie sprzeciwu…" />
-                <Button size="sm" disabled={objection.trim().length < 10} onClick={() => m.mutate({ path: "/objection", json: { text: objection } })} loading={m.isPending}>
-                  Złóż sprzeciw do {review.office.objection_body}
-                </Button>
-              </div>
-            )}
-          </div>
+          </Link>
         )}
 
         {review.objection_at && (

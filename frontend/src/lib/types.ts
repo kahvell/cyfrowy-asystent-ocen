@@ -65,6 +65,7 @@ export interface Note {
   text: string;
   sentiment: "positive" | "neutral" | "negative" | null;
   source: "manager" | "self";
+  shared_with_employee: boolean;
   classified: boolean;
   criteria: NoteTag[];
 }
@@ -121,6 +122,7 @@ export interface Review {
   reviewer_form: FormPerson;
   attempt: number;
   assessment_invited_at: string | null;
+  assessment_confirmed_at: string | null;
   opening_conversation_date: string | null;
   opening_notes: string;
   criteria_reviewer_confirmed_at: string | null;
@@ -290,4 +292,40 @@ export interface Overview {
   reviewer_calibration: { reviewer_id: number; reviewer_name: string; n: number; average: number | null; office_average: number; delta: number; flag: string | null; hidden: boolean }[];
   gender_gap: { k: number; groups: Record<string, { n: number; average: number | null }>; gap_k_minus_m: number | null };
   ai_adoption: { by_kind: Record<string, Record<string, number>>; by_model: Record<string, number> };
+}
+
+export interface TeamStats {
+  date_from: string | null;
+  date_to: string | null;
+  employees: {
+    employee_id: number;
+    full_name: string;
+    position: string;
+    department: string | null;
+    reviews: {
+      review_id: number;
+      cycle_id: number;
+      cycle: string;
+      period_start: string;
+      period_end: string;
+      score: number | null;
+      level: string | null;
+      result: string | null;
+      status: ReviewStatus;
+      drawn_up: string;
+    }[];
+    n: number;
+    average: number | null;
+    latest_level: string | null;
+    latest_result: string | null;
+    latest_score: number | null;
+  }[];
+  summary: {
+    n_employees: number;
+    n_reviews: number;
+    average: number | null;
+    levels: Record<string, number>;
+    results: Record<string, number>;
+    criteria: { code: string; name: string; average: number; n: number }[];
+  };
 }

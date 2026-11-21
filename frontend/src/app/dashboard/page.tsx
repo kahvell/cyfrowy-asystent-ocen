@@ -2,11 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, EyeOff, Lock, Sparkles } from "lucide-react";
+import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Reminders } from "@/components/reminders";
-import { Badge, Card, CardHeader, ErrorBox, PageTitle, Spinner } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, ErrorBox, Input, Label, PageTitle, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Cycle, Overview } from "@/lib/types";
+import { fmtDate } from "@/lib/utils";
 
 // Skala porządkowa z punktem środkowym („na poziomie oczekiwań”) -> paleta rozbieżna czerwień <-> niebieski, szary środek.
 const LEVELS = [
@@ -221,12 +223,24 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 export default function DashboardPage() {
-  const { data, error, isPending } = useQuery({ queryKey: ["overview"], queryFn: () => api<Overview>("/analytics/overview") });
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const qs = new URLSearchParams();
+  if (from) qs.set("date_from", from);
+  if (to) qs.set("date_to", to);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const { data, error, isPending } = useQuery({
+    queryKey: ["overview", from, to],
+    queryFn: () => api<Overview>(`/analytics/overview${suffix}`),
+  });
   const { data: cycles } = useQuery({ queryKey: ["cycles"], queryFn: () => api<Cycle[]>("/cycles") });
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox error={error} />;
 
   const cycle = cycles?.find((c) => c.id === data.cycle_id);
+  const scopeLabel = from || to
+    ? `okres oceny ${from ? fmtDate(from) : "…"} – ${to ? fmtDate(to) : "…"}`
+    : cycle?.name ?? "Cykl";
   const adoption = data.ai_adoption.by_kind.draft_justification ?? { accepted: 0, edited: 0, rejected: 0, pending: 0 };
   const decided = adoption.accepted + adoption.edited + adoption.rejected;
   const pct = (n: number) => (decided ? `${Math.round((n / decided) * 100)}%` : "-");
@@ -236,13 +250,33 @@ export default function DashboardPage() {
     <>
       <PageTitle
         title="Dashboard urzędu"
-        subtitle={`${cycle?.name ?? "Cykl"} · ${data.distribution.total.n} zatwierdzonych ocen`}
+        subtitle={`${scopeLabel} · ${data.distribution.total.n} zatwierdzonych ocen`}
         action={
           <Badge tone="slate">
             <Lock className="h-3 w-3" aria-hidden /> wyłącznie dane zagregowane · k-anonimowość: grupy &lt; {data.distribution.k} osób ukryte
           </Badge>
         }
       />
+      <Card className="mb-6">
+        <div className="flex flex-wrap items-end gap-3 p-5">
+          <div>
+            <Label htmlFor="df">Okres oceny od</Label>
+            <Input id="df" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="dt">do</Label>
+            <Input id="dt" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          {(from || to) && (
+            <Button variant="ghost" onClick={() => { setFrom(""); setTo(""); }}>
+              Wyczyść zakres
+            </Button>
+          )}
+          <p className="text-xs text-muted">
+            Statystyki obejmują oceny, których okres oceny mieści się w wybranym zakresie. Bez filtra - domyślny najnowszy zamknięty cykl.
+          </p>
+        </div>
+      </Card>
       <Reminders title="Sprawy kadrowe: sprzeciwy, stopnie służbowe, ponowne oceny" />
       <div className="grid gap-6 xl:grid-cols-2">
         <Distribution data={data.distribution} />

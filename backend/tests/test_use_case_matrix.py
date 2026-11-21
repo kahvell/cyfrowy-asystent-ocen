@@ -1,12 +1,13 @@
 """Przypadki użycia KPRM bez wcześniejszego pokrycia testem: fikcja zapoznania, odrzucenie wniosku o termin,
 scheduler (codzienne przypomnienia), ponowne sporządzenie oceny po sprzeciwie, powiadomienia o stopniu."""
 
-from datetime import date
+from datetime import date, timedelta
 
 from sqlmodel import Session, select
 
 from app.db import engine
-from app.models import Notification, User
+from app.models import Notification, Review, User
+from app.services import deadlines as dl
 from app.services.notify import daily_digest
 
 
@@ -14,13 +15,25 @@ def _team(client, h):
     return {e["full_name"]: e for e in client.get("/employees", headers=h).json()}
 
 
-def _make_final(client, manager, rid, ipr="Rozwój kompetencji cyfrowych."):
+def _login(client, email):
+    t = client.post("/auth/login", json={"email": email, "password": "demo123"}).json()["access_token"]
+    return {"Authorization": f"Bearer {t}"}
+
+
+def _confirm_assessment_term(client, manager, employee, rid, when="2026-12-05T10:00"):
+    """Bramka etapu IV: zaproszenie (.ics) i potwierdzenie terminu rozmowy przez ocenianego (§ 10)."""
+    assert client.get(f"/reviews/{rid}/invite.ics?kind=assessment&when={when}", headers=manager).status_code == 200
+    assert client.post(f"/reviews/{rid}/assessment/confirm", headers=employee).status_code == 200
+
+
+def _make_final(client, manager, employee, rid, ipr="Rozwój kompetencji cyfrowych."):
     client.post(f"/reviews/{rid}/start", headers=manager)
     rev = client.get(f"/reviews/{rid}", headers=manager).json()
     crits = [{"criterion_id": c["criterion_id"], "score": c["score"] or 5,
               "justification": c["justification"] or "Konkretne zachowania z okresu oceny."} for c in rev["criteria"]]
     assert client.patch(f"/reviews/{rid}", headers=manager, json={"criteria": crits, "ipr_conclusions": ipr}).status_code == 200
     assert client.post(f"/reviews/{rid}/submit", headers=manager).status_code == 200
+    _confirm_assessment_term(client, manager, employee, rid)
     assert client.post(f"/reviews/{rid}/discussed", headers=manager,
                        json={"conversation_date": date.today().isoformat()}).status_code == 200
     fin = client.post(f"/reviews/{rid}/finalize", headers=manager)
@@ -31,7 +44,7 @@ def _make_final(client, manager, rid, ipr="Rozwój kompetencji cyfrowych."):
 def test_ack_fiction(client, manager, hr):
     """„Stwierdzenie fikcji zapoznania z oceną” - oceniany nie mógł lub nie chciał potwierdzić."""
     rid = _team(client, manager)["Tomasz Wójcik"]["current_review"]["id"]
-    final = _make_final(client, manager, rid)
+    final = _make_final(client, manager, _login(client, "tomasz.wojcik@demo.gov.pl"), rid)
     assert final["status"] == "final"
     assert client.post(f"/reviews/{rid}/ack-fiction", headers=manager, json={"note": "x"}).status_code == 422
     r = client.post(f"/reviews/{rid}/ack-fiction", headers=manager,
@@ -100,7 +113,7 @@ def test_objection_second_drawing_up_returns_to_assessment(client, manager, hr):
                client.post(f"/reviews/{rid}/criteria/confirm", headers=manager),
                client.post(f"/reviews/{rid}/criteria/acknowledge", headers=h)):
         assert st.status_code == 200, st.text
-    _make_final(client, manager, rid)
+    _make_final(client, manager, h, rid)
     assert client.post(f"/reviews/{rid}/acknowledge", headers=h).status_code == 200
     ob = client.post(f"/reviews/{rid}/objection", headers=h, json={"text": "Ocena nie uwzględnia moich osiągnięć."})
     assert ob.status_code == 200, ob.text
@@ -112,6 +125,7 @@ def test_objection_second_drawing_up_returns_to_assessment(client, manager, hr):
     assert any("Rozpatrzono sprzeciw" in n["subject"] for n in client.get("/notifications", headers=h).json())
     # po sporządzeniu po raz drugi - ponownie zapoznanie i prawo do sprzeciwu (art. 83 ust. 4)
     client.post(f"/reviews/{rid}/submit", headers=manager)
+    _confirm_assessment_term(client, manager, h, rid)
     client.post(f"/reviews/{rid}/discussed", headers=manager, json={"conversation_date": date.today().isoformat()})
     assert client.post(f"/reviews/{rid}/finalize", headers=manager).status_code == 200
     again = client.post(f"/reviews/{rid}/acknowledge", headers=h).json()
@@ -141,6 +155,7 @@ def test_promotion_application_notifies_employee_and_hr(client, manager, hr):
         st = client.patch(f"/reviews/{rid}", headers=manager, json=body)
         assert st.status_code == 200, st.text
     assert client.post(f"/reviews/{rid}/submit", headers=manager).status_code == 200
+    _confirm_assessment_term(client, manager, h, rid)
     assert client.post(f"/reviews/{rid}/discussed", headers=manager,
                        json={"conversation_date": date.today().isoformat()}).status_code == 200
     fin = client.post(f"/reviews/{rid}/finalize", headers=manager)
@@ -148,3 +163,64 @@ def test_promotion_application_notifies_employee_and_hr(client, manager, hr):
     assert fin.json()["promotion_target"] == "trzeciego"
     assert any("kolejnego stopnia" in n["subject"] for n in client.get("/notifications", headers=h).json())
     assert any("kolejnego stopnia" in n["subject"] for n in client.get("/notifications", headers=hr).json())
+
+
+def test_objection_directly_from_acknowledgement_stage(client, manager, hr):
+    """Na etapie zapoznania („nie akceptuję”) oceniany może wnieść sprzeciw bez wcześniejszego potwierdzania
+    zapoznania - wniesienie sprzeciwu jest równoznaczne z zapoznaniem się z oceną (art. 83 ust. 1)."""
+    e, h = _employee_with_login(client, hr, "Norbert Nieakceptujacy", employment_start="2024-11-25")
+    rid = e["review_started"]
+    for st in (client.patch(f"/reviews/{rid}", headers=manager, json={"opening_conversation_date": "2024-12-02"}),
+               client.post(f"/reviews/{rid}/criteria/confirm", headers=manager),
+               client.post(f"/reviews/{rid}/criteria/acknowledge", headers=h)):
+        assert st.status_code == 200, st.text
+    final = _make_final(client, manager, h, rid)
+    # przed zapoznaniem zegar 7 dni nie rusza
+    assert final["status"] == "final"
+    assert final["acknowledged_at"] is None
+    assert final["deadlines"]["objection_deadline"] is None
+    assert final["deadlines"]["objection_open"] is False
+
+    obj = client.post(f"/reviews/{rid}/objection", headers=h,
+                      json={"text": "Nie akceptuję oceny - nie zgadzam się z oceną kryterium komunikacji."})
+    assert obj.status_code == 200, obj.text
+    body = obj.json()
+    assert body["status"] == "objection"
+    assert body["acknowledged_at"] == date.today().isoformat()  # sprzeciw uruchamia zapoznanie
+    assert body["objection_at"] == date.today().isoformat()
+    # informacja do komórki kadrowej (dyrektor generalny) - 14 dni na rozpatrzenie (art. 83 ust. 3)
+    assert any("Sprzeciw od oceny okresowej" in n["subject"] for n in client.get("/notifications", headers=hr).json())
+    assert client.post(f"/reviews/{rid}/objection/decision", headers=hr, json={"decision": "odrzucony"}).status_code == 200
+
+
+def test_objection_window_runs_from_acknowledgement(client, manager, hr):
+    """Termin 7 dni biegnie od rzeczywistego zapoznania, po nim biegnie nieprzerwanie (nieobecność go nie
+    wstrzymuje ani nie wydłuża), a koniec w dzień wolny przesuwa się na najbliższy dzień roboczy (art. 83 ust. 1)."""
+    e, h = _employee_with_login(client, hr, "Beata Bezokienna", employment_start="2024-11-25")
+    rid = e["review_started"]
+    for st in (client.patch(f"/reviews/{rid}", headers=manager, json={"opening_conversation_date": "2024-12-02"}),
+               client.post(f"/reviews/{rid}/criteria/confirm", headers=manager),
+               client.post(f"/reviews/{rid}/criteria/acknowledge", headers=h)):
+        assert st.status_code == 200, st.text
+    _make_final(client, manager, h, rid)
+    ack = client.post(f"/reviews/{rid}/acknowledge", headers=h).json()
+    assert ack["deadlines"]["objection_open"] is True
+    # koniec terminu: 7 dni od zapoznania, przesunięty na dzień roboczy
+    assert ack["deadlines"]["objection_deadline"] == dl.days_deadline(date.today(), 7).isoformat()
+
+    # nieobecność (np. L4) po zapoznaniu nie wstrzymuje ani nie wydłuża terminu na sprzeciw
+    client.post(f"/admin/employees/{e['id']}/absences", headers=hr, json={
+        "start": date.today().isoformat(), "end": (date.today() + timedelta(days=40)).isoformat(),
+        "kind": "zwolnienie lekarskie"})
+    after = client.get(f"/reviews/{rid}", headers=manager).json()
+    assert after["deadlines"]["objection_deadline"] == ack["deadlines"]["objection_deadline"]
+
+    # po upływie 7 dni sprzeciw jest odrzucany
+    with Session(engine) as s:
+        r = s.get(Review, rid)
+        r.acknowledged_at = date.today() - timedelta(days=10)
+        s.add(r)
+        s.commit()
+    late = client.post(f"/reviews/{rid}/objection", headers=h,
+                       json={"text": "Sprzeciw po terminie, powinien zostać odrzucony."})
+    assert late.status_code == 409

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ClipboardCheck, GraduationCap, MessagesSquare, NotebookText, ShieldAlert, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronDown, ClipboardCheck, FileSignature, GraduationCap, MessagesSquare, NotebookText, ShieldAlert, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -278,13 +278,20 @@ export default function ReviewPage() {
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox error={error} />;
 
-  // etap bieżący wyznacza status procesu; kliknięcie w pasku etapów otwiera etap przeszły do wglądu
+  // etap bieżący wyznacza status procesu; kliknięcie w pasku etapów otwiera etap przeszły do wglądu lub edycji
   const currentStep: Review["status"] = review.status === "objection" ? "final" : review.status;
   const pickedStep = picked && picked.reviewId === reviewId && picked.status === review.status ? picked.step : null;
   const viewStep: Review["status"] = pickedStep ?? currentStep;
   const viewingCurrent = viewStep === currentStep;
-  // edytować można wyłącznie etap bieżący - etapy przeszłe (potwierdzone przez ocenianego) tylko do wglądu
-  const editable = isReviewer && viewingCurrent && (review.status === "draft" || review.status === "discussed");
+  // Bramki potwierdzeń są na etapach 1 (kryteria), 4 (rozmowa oceniająca) i 6 (zapoznanie). Etap zamyka się
+  // dopiero po potwierdzeniu przez drugą stronę; samo przejście przez etap bez potwierdzenia (np. 2 -> 3)
+  // nie blokuje powrotu i zmian w etapie wcześniejszym. O tym, co wolno zmienić, rozstrzyga bieżący status
+  // arkusza (tak samo jak backend w editable_fields), a nie oglądany etap.
+  const criteriaEditable = isReviewer && review.status === "criteria" && !review.criteria_reviewer_confirmed_at;
+  const editable =
+    isReviewer &&
+    (review.status === "draft" || review.status === "discussed" || (review.status === "submitted" && !review.assessment_confirmed_at));
+  const viewEditable = viewStep === "criteria" ? criteriaEditable : editable;
   const showNote = (nid: number) => {
     setTab("evidence");
     setHighlight(nid);
@@ -320,7 +327,15 @@ export default function ReviewPage() {
       {!viewingCurrent && (
         <Card className="mb-6 px-5 py-3 text-sm">
           <span className="text-slate-700">
-            Podglądasz zakończony etap <strong>{stepLabel(viewStep)}</strong> - edycja i zmiana statusu są możliwe tylko na etapie bieżącym.
+            {viewEditable ? (
+              <>
+                Przeglądasz wcześniejszy etap <strong>{stepLabel(viewStep)}</strong> - możesz go poprawić; powrót nie zmienia statusu procesu.
+              </>
+            ) : (
+              <>
+                Podglądasz zakończony etap <strong>{stepLabel(viewStep)}</strong> - etap został zamknięty po potwierdzeniu przez drugą stronę i jest tylko do wglądu.
+              </>
+            )}
           </span>{" "}
           <button type="button" className="text-primary hover:underline" onClick={() => setPicked(null)}>
             Wróć do bieżącego etapu ({stepLabel(currentStep)})
@@ -330,7 +345,7 @@ export default function ReviewPage() {
 
       {viewStep === "criteria" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <CriteriaStage review={review} isReviewer={isReviewer && viewingCurrent} isEmployee={isEmployee && viewingCurrent} onWarnings={setWarnings} />
+          <CriteriaStage review={review} isReviewer={criteriaEditable} isEmployee={isEmployee && viewingCurrent} onWarnings={setWarnings} />
           <aside className="space-y-4">
             {warnings && <WarningsList warnings={warnings} review={review} onShowNote={() => {}} onJump={() => {}} />}
             {isReviewer && viewingCurrent && <ConversationPrep reviewId={review.id} kind="opening" />}
@@ -338,7 +353,7 @@ export default function ReviewPage() {
         </div>
       ) : viewStep === "observation" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <ObservationStage review={review} isReviewer={isReviewer && viewingCurrent} />
+          <ObservationStage review={review} isReviewer={isReviewer} />
           {isReviewer && viewingCurrent && (
             <aside>
               <ConversationPrep reviewId={review.id} kind="feedback" />
@@ -349,6 +364,25 @@ export default function ReviewPage() {
         <div className="space-y-6">
           <ReadOnlyReview review={review} />
           {isEmployee && ["draft", "submitted"].includes(review.status) && <DueDateRequests review={review} isReviewer={false} isEmployee />}
+          {isEmployee && review.status === "submitted" && (
+            <Card className="px-5 py-4">
+              {!review.assessment_invited_at ? (
+                <p className="text-sm text-muted">Oczekuj na zaproszenie na rozmowę oceniającą od przełożonego. Potwierdzisz wtedy termin rozmowy.</p>
+              ) : review.assessment_confirmed_at ? (
+                <p className="text-sm text-emerald-800">Termin rozmowy oceniającej potwierdzony {fmtDate(review.assessment_confirmed_at)}. Rozmowa zostanie przeprowadzona w ustalonym terminie.</p>
+              ) : (
+                <>
+                  <p className="mb-3 text-sm text-slate-700">
+                    Przełożony zaprosił Cię na rozmowę oceniającą. Potwierdź termin, żeby odblokować rozmowę i jej rozliczenie (§ 10).
+                  </p>
+                  <Button onClick={() => transition.mutate({ action: "assessment/confirm" })} loading={transition.isPending}>
+                    <FileSignature className="h-4 w-4" aria-hidden /> Potwierdzam termin rozmowy oceniającej
+                  </Button>
+                  <ErrorBox error={transition.error} />
+                </>
+              )}
+            </Card>
+          )}
           {["final", "acknowledged", "objection"].includes(review.status) && <DeliveryPanel review={review} isReviewer={false} isEmployee={isEmployee} isHr={isHr} />}
         </div>
       ) : (
@@ -439,20 +473,24 @@ export default function ReviewPage() {
                   )}
                   {review.status === "submitted" && (
                     <>
-                      {review.assessment_invited_at ? (
+                      {!review.assessment_invited_at ? (
+                        <div className="w-full space-y-2">
+                          <p className="text-sm text-amber-800">
+                            Umów rozmowę oceniającą - wyślij zaproszenie (.ics), żeby oceniany potwierdził termin.
+                          </p>
+                          <InviteButton reviewId={review.id} kind="assessment" label="Zaproś na rozmowę oceniającą" />
+                        </div>
+                      ) : !review.assessment_confirmed_at ? (
+                        <p className="w-full text-sm text-amber-800">
+                          Zaproszenie wysłane {fmtDate(review.assessment_invited_at)} - czekamy na potwierdzenie terminu rozmowy przez ocenianego (§ 10).
+                        </p>
+                      ) : (
                         <>
                           <Input type="date" value={convDate} onChange={(e) => setConvDate(e.target.value)} className="w-auto" aria-label="Data rozmowy" />
                           <Button onClick={() => transition.mutate({ action: "discussed", json: { conversation_date: convDate } })} loading={transition.isPending}>
                             <MessagesSquare className="h-4 w-4" aria-hidden /> Rozmowa przeprowadzona
                           </Button>
                         </>
-                      ) : (
-                        <div className="w-full space-y-2">
-                          <p className="text-sm text-amber-800">
-                            Umów rozmowę oceniającą - wyślij zaproszenie (.ics), żeby odblokować ustawienie daty rozmowy i potwierdzenie jej odbycia.
-                          </p>
-                          <InviteButton reviewId={review.id} kind="assessment" label="Zaproś na rozmowę oceniającą" />
-                        </div>
                       )}
                       <Button variant="ghost" onClick={() => transition.mutate({ action: "reopen" })}>
                         Wróć do szkicu

@@ -1,7 +1,7 @@
 """Autoryzacja na poziomie danych (nie we frontendzie).
 
 - manager widzi tylko swoich bezpośrednich podwładnych (employee.manager_id),
-- employee widzi tylko siebie (w tym notatki na swój temat - przejrzystość, art. 15 RODO),
+- employee widzi tylko siebie (własne notatki oraz notatki przełożonego udostępnione mu wprost),
 - hr widzi agregaty (endpointy /analytics) oraz sporządzone arkusze (dokumentacja kadrowa, sprzeciwy),
   bez szkiców ocen i bez dziennika obserwacji,
 - admin widzi wszystko.
