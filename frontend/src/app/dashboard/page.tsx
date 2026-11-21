@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, EyeOff, Lock, Sparkles } from "lucide-react";
+import { AlertTriangle, EyeOff, Lock, PenLine } from "lucide-react";
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Reminders } from "@/components/reminders";
@@ -297,7 +297,7 @@ export default function DashboardPage() {
             <Stat label="Propozycje AI: odrzucone" value={pct(adoption.rejected)} />
           </div>
           <p className="flex items-start gap-1.5 px-5 pb-5 text-xs text-muted">
-            <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-ai" aria-hidden />
+            <PenLine className="mt-0.5 h-3 w-3 shrink-0 text-ai" aria-hidden />
             Wysoki odsetek edycji i odrzuceń to dobry sygnał: przełożeni weryfikują propozycje AI, a nie przepisują ich bezrefleksyjnie.
           </p>
         </Card>

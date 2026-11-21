@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertOctagon, AlertTriangle, Check, Info, MessagesSquare, Pencil, Sparkles, X } from "lucide-react";
+import { AlertOctagon, AlertTriangle, Check, Info, MessagesSquare, Pencil, PenLine, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import type { ComparePayload, DraftPayload, Review, Suggestion, Warning } from "@/lib/types";
@@ -49,7 +49,7 @@ export function DraftSuggestion({
   });
 
   return (
-    <div className="mt-3 rounded-md border border-violet-200 bg-ai-bg p-4">
+    <div className="mt-3 ai-draft rounded-md p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <AiLabel model={modelLabel(suggestion.model)} />
         <button onClick={onClose} aria-label="Zamknij propozycję" className="text-slate-500 hover:text-slate-800">
@@ -155,7 +155,7 @@ export function WarningsList({
                     <Badge tone={s.tone}>{s.label}</Badge>
                     {w.source === "ai" ? (
                       <Badge tone="violet">
-                        <Sparkles className="h-3 w-3" aria-hidden /> AI
+                        <PenLine className="h-3 w-3" aria-hidden /> AI
                       </Badge>
                     ) : (
                       <Badge>reguła</Badge>
@@ -220,7 +220,7 @@ export function ComparePanel({ suggestion }: { suggestion: Suggestion<ComparePay
         </tbody>
       </table>
       {p.summary && <p className="text-sm text-slate-700">{p.summary}</p>}
-      <div className="rounded-md border border-violet-200 bg-ai-bg p-3">
+      <div className="ai-draft rounded-md p-3">
         <div className="mb-2 flex items-center gap-2">
           <MessagesSquare className="h-4 w-4 text-ai" aria-hidden />
           <span className="text-sm font-medium">Pytania do rozmowy oceniającej (§ 10)</span>

@@ -73,7 +73,7 @@ export default function EmployeePage() {
 
   if (isPending) return <Spinner />;
   if (error) return <ErrorBox error={error} />;
-  const isManager = me?.role === "manager" || me?.role === "admin";
+  const isManager = me?.role === "manager";
 
   return (
     <>

@@ -398,3 +398,156 @@ def conversation_prep(kind: str, ctx: dict, people: list[str]) -> PipelineResult
 
     data, model = run_structured(prompt, ConversationPrepResult, heuristic, people)
     return PipelineResult(data, model, version)
+
+
+# ---------------------------------------------------------------- suggest_criteria (etap I - oceniający)
+
+
+class CriterionProposal(BaseModel):
+    criterion_code: str
+    why: str
+    evidence: list[str] = Field(default_factory=list, max_length=4)
+
+
+class CriteriaSuggestion(BaseModel):
+    proposals: list[CriterionProposal] = Field(default_factory=list, max_length=3)
+    talking_points: list[str] = Field(default_factory=list, max_length=5)
+
+
+def suggest_criteria(ctx: dict, people: list[str]) -> PipelineResult:
+    """Propozycja kryteriów dodatkowych (§ 5 ust. 2: nie więcej niż 3) na bazie danych, które system już ma.
+
+    ctx: employee_name, position, duties, sheet_type, mandatory[] (nazwy),
+    candidates[] {code, name, indicators[], signals[] {kind, weight, text}} - sygnały policzone w kodzie
+    (opis stanowiska, poprzednia ocena, poprzedni IPR, wybory dla tego samego stanowiska)."""
+    prompt, version = render_prompt("suggest_criteria", **ctx)
+    by_code = {c["code"]: c for c in ctx["candidates"]}
+
+    def heuristic() -> CriteriaSuggestion:
+        ranked = sorted(ctx["candidates"], key=lambda c: -sum(s["weight"] for s in c["signals"]))
+        proposals = []
+        for c in ranked:
+            if not c["signals"] or len(proposals) == 3:
+                continue
+            top = sorted(c["signals"], key=lambda s: -s["weight"])
+            kinds = {s["kind"] for s in top}
+            if kinds & {"prev_low", "ipr"}:
+                why = (f"Obszar do dalszego rozwoju z poprzedniego okresu - kryterium „{c['name']}” pozwoli rzetelnie "
+                       "ocenić postęp.")
+            elif "duties" in kinds:
+                why = f"Kryterium „{c['name']}” odpowiada głównym obowiązkom z opisu stanowiska."
+            elif "prev_chosen" in kinds:
+                why = f"Kryterium „{c['name']}” było wybrane w poprzedniej ocenie - zachowasz porównywalność wyników."
+            else:
+                why = f"Kryterium „{c['name']}” bywa wybierane dla tego stanowiska w urzędzie."
+            proposals.append(CriterionProposal(criterion_code=c["code"], why=why,
+                                               evidence=[s["text"] for s in top][:4]))
+        points = [
+            "Zapytaj, jak pracownik rozumie każde kryterium i jak wygląda zachowanie „na poziomie oczekiwań”.",
+            "Sprawdź, czy kryteria dodatkowe odpowiadają temu, czym pracownik faktycznie zajmuje się na co dzień.",
+        ]
+        if any(by_code[p.criterion_code]["signals"] and {s["kind"] for s in by_code[p.criterion_code]["signals"]}
+               & {"prev_low", "ipr"} for p in proposals):
+            points.append("Nawiąż do wniosków z poprzedniej oceny i IPR: co już się udało, co jest jeszcze do zrobienia.")
+        return CriteriaSuggestion(proposals=proposals, talking_points=points)
+
+    data, model = run_structured(prompt, CriteriaSuggestion, heuristic, people)
+    # walidacja w kodzie: tylko kryteria dodatkowe dla tego arkusza, bez powtórzeń, maks. 3 (§ 5 ust. 2)
+    seen: set[str] = set()
+    valid = []
+    for p in data.proposals:
+        if p.criterion_code in by_code and p.criterion_code not in seen:
+            seen.add(p.criterion_code)
+            valid.append(p)
+    data.proposals = valid[:3]
+    return PipelineResult(data, model, version)
+
+
+# ---------------------------------------------------------------- employee_opening_prep (etap I - oceniany)
+
+
+class CriterionGuide(BaseModel):
+    criterion: str
+    what_it_means: str
+    ask: str
+
+
+class AgreeDisagree(BaseModel):
+    situation: str
+    how: str
+
+
+class EmployeeOpeningPrep(BaseModel):
+    goal: str
+    before: list[str]
+    criteria_guide: list[CriterionGuide]
+    my_goals: list[str]
+    agree_disagree: list[AgreeDisagree]
+    questions: list[str]
+    rights: list[str]
+
+
+def employee_opening_prep(ctx: dict, people: list[str]) -> PipelineResult:
+    """Wsparcie ocenianego przed rozmową rozpoczynającą (§ 5): jak rozmawiać o kryteriach, oczekiwaniach i własnych
+    celach, jak się zgodzić albo nie zgodzić z kryterium. Bez dostępu do dziennika przełożonego.
+
+    ctx: employee_name, position, duties, criteria[] {name, indicators[], is_additional}, prev_level, ipr_goals[]."""
+    prompt, version = render_prompt("employee_opening_prep", **ctx)
+
+    def heuristic() -> EmployeeOpeningPrep:
+        guide = [CriterionGuide(
+            criterion=c["name"],
+            what_it_means=(c["indicators"][0] if c["indicators"] else "Zapytaj przełożonego o przykłady zachowań."),
+            ask=(f"Jak w mojej pracy wygląda „{c['name'].lower()}” na poziomie oczekiwań? Proszę o przykład sytuacji, "
+                 "w której to widać."),
+        ) for c in ctx["criteria"]]
+        my_goals = [
+            "Zapisz 2-3 cele na okres oceny: co chcesz osiągnąć w pracy i czego się nauczyć.",
+            "Do każdego celu dopisz, po czym poznasz, że się udało, i jakiego wsparcia potrzebujesz.",
+            "Połącz cele z kryteriami - łatwiej będzie pokazać ich realizację w ocenie.",
+        ]
+        if ctx.get("ipr_goals"):
+            my_goals.insert(0, "Wróć do celów z poprzedniego IPR (" + "; ".join(ctx["ipr_goals"][:3])
+                            + "). Co udało się zrealizować, a co warto kontynuować?")
+        return EmployeeOpeningPrep(
+            goal=("Wspólnie z przełożonym ustalić, czego oczekujecie w okresie oceny: obowiązki, kryteria, sposób ich "
+                  "spełniania i Twoje cele (§ 5 ust. 1 rozporządzenia). To także Twoja rozmowa - masz w niej głos."),
+            before=[
+                "Przeczytaj opis swojego stanowiska - czy odpowiada temu, czym naprawdę się zajmujesz?",
+                "Przejrzyj kryteria poniżej i zaznacz te, przy których nie wiesz, czego się od Ciebie oczekuje.",
+                "Przygotuj 2-3 przykłady sytuacji z pracy, z których jesteś zadowolony(-a), i jedną trudną.",
+                "Zastanów się, jakiego wsparcia potrzebujesz: szkolenie, mentor, zmiana zakresu zadań.",
+            ],
+            criteria_guide=guide,
+            my_goals=my_goals,
+            agree_disagree=[
+                AgreeDisagree(situation="Zgadzasz się z kryterium",
+                              how="Powiedz to wprost i dopytaj o konkret: „Zgadzam się. Jak będziemy sprawdzać postępy "
+                                  "w tym obszarze?”. Ustalcie przykład zachowania na poziomie oczekiwań."),
+                AgreeDisagree(situation="Kryterium dodatkowe nie pasuje do Twojej pracy",
+                              how="Odwołaj się do obowiązków: „Większość mojego czasu zajmuje X, a to kryterium dotyczy Y. "
+                                  "Czy możemy rozważyć kryterium Z?”. Decyzja należy do oceniającego, ale rzeczowe "
+                                  "argumenty mogą ją zmienić."),
+                AgreeDisagree(situation="Nie wiesz, czego się od Ciebie oczekuje",
+                              how="Poproś o przykład: „Co musiałbym/musiałabym robić, żeby to kryterium było spełnione na "
+                                  "poziomie oczekiwań, a co - powyżej?”. Poproś o zapisanie ustaleń w arkuszu."),
+                AgreeDisagree(situation="Opis stanowiska jest nieaktualny",
+                              how="Zgłoś to i poproś o aktualizację - kryteria i oczekiwania powinny wynikać "
+                                  "z rzeczywistych obowiązków."),
+            ],
+            questions=[
+                "Co jest najważniejsze w mojej pracy w najbliższym okresie?",
+                "Jak i jak często będę dostawać informację zwrotną przed oceną?",
+                "Na jakie wsparcie w rozwoju mogę liczyć (szkolenia, nowe zadania)?",
+                "Czy możemy zapisać ustalenia o oczekiwaniach i moich celach w arkuszu?",
+            ],
+            rights=[
+                "Podpis potwierdza odbycie rozmowy i zapoznanie z kryteriami oraz terminem oceny - nie zgodę z nimi.",
+                "Kryteria dodatkowe wybiera oceniający (nie więcej niż 3, § 5 ust. 2), ale możesz przedstawić swoje "
+                "argumenty.",
+                "Od sporządzonej oceny przysługuje sprzeciw w 7 dni od zapoznania się z nią (art. 83 ustawy).",
+            ],
+        )
+
+    data, model = run_structured(prompt, EmployeeOpeningPrep, heuristic, people)
+    return PipelineResult(data, model, version)

@@ -14,6 +14,7 @@ Całość działa **lokalnie, bez chmury**. Model językowy (Bielik / PLLuM prze
 | Ocena pisana z pamięci z ostatnich tygodni | **Dziennik obserwacji** przez cały okres. AI przypisuje notatki do kryteriów z rozporządzenia, a przełożony może je poprawić. System przypomina o pracownikach bez notatek od 3 miesięcy. |
 | Ogólniki („pracuje dobrze”) | **Propozycja uzasadnienia** złożona z notatek. Każde zdanie wskazuje notatki źródłowe (klikalne `#id`), więc AI nie dopisuje osiągnięć, których nie było. |
 | Efekt świeżości, efekt halo, stronniczy język | **Kontrola jakości**: reguły w kodzie (efekt świeżości, halo, brak dowodów, niespójność ocen z notatkami, skrajne oceny bez uzasadnienia) oraz słownik i LLM do ogólników i języka stronniczego (płeć, wiek, zdrowie, rodzina, osobowość zamiast zachowań). |
+| Kryteria dobierane „z automatu”, a pracownik bierny w rozmowie rozpoczynającej | **Etap I z AI po obu stronach.** Przełożony dostaje propozycję kryteriów dodatkowych (maks. 3, § 5 ust. 2) z danych historycznych: opis stanowiska, słabsze wyniki z poprzedniej oceny, cele z IPR, kryteria wybierane dla tego samego stanowiska. Dowody liczy kod, model tylko uzasadnia, a decyzja trafia do dziennika zdarzeń. Pracownik dostaje własne przygotowanie do rozmowy: co znaczą kryteria i o co zapytać, jak przedstawić swoje cele, jak rzeczowo zgodzić się albo nie zgodzić z kryterium. Przełożony tego materiału nie widzi. |
 | Rozmowa oceniająca jako formalność | **Porównanie z samooceną** i pytania do rozmowy (§ 10), zaczynając od największych rozbieżności. |
 | IPR pisany „na odczepnego” | **Generator IPR**: cele, działania, mierniki i terminy dla słabszych kryteriów oraz szkolenia z katalogu urzędu. Po zatwierdzeniu wnioski trafiają do arkusza (§ 11 ust. 1 pkt 5). |
 | „Wszyscy dostają bardzo dobry” | **Dashboard HR**: rozkład ocen w komórkach, kalibracja oceniających (łagodny / surowy), luki kompetencyjne, porównanie średnich K/M, adopcja AI. Tylko agregaty z k-anonimowością (grupy poniżej 5 osób są ukryte). |
@@ -108,7 +109,7 @@ administrator lub HR ustawia go w polu **E-mail** przy dodawaniu i edycji pracow
 | Pracownik | `anna.kowalska@demo.gov.pl` | Anna Kowalska: samoocena, potwierdzenia, zapoznanie z oceną, sprzeciw, wniosek o zmianę terminu, IPR |
 | HR | `hr@demo.gov.pl` | Kadry (pracownicy, schemat urzędu, zastępstwa, import, zestawienia), sprzeciwy, zatwierdzanie IPR, dashboard |
 | Dyrektor generalny | `waclaw.zawadzki@demo.gov.pl` | Wacław Zawadzki: przełożony naczelników wydziałów - ocenia ich (arkusz B); na `/me` widzi własną ocenę okresową |
-| Administrator | `admin@demo.gov.pl` | wszyscy pracownicy, **tryb korekty błędów** w arkuszach (z powodem i historią), kadry |
+| Administrator | `admin@demo.gov.pl` | konta użytkowników i **tryb korekty błędów** w arkuszach (z powodem i historią) - wg schematu procesu KPRM; bez wglądu w dziennik obserwacji, samoocenę i szkice ocen, nie działa jako oceniający |
 | Przełożona | `ewa.dabrowska@demo.gov.pl` | Ewa Dąbrowska: „łagodna” oceniająca na dashboardzie; po wprowadzeniu zastępstwa przejmuje zespół Marka |
 | Przełożony | `andrzej.krawczyk@demo.gov.pl` | Andrzej Krawczyk: „surowy” oceniający, wydział z ocenami negatywnymi |
 
@@ -163,7 +164,7 @@ Zasady: **nigdy `docker compose down -v`** (flaga `-v` usuwa wolumen `pgdata`, c
 - **Przejrzystość:** treści AI są oznaczone w UI razem z nazwą modelu. Jeśli model był niedostępny i zadziałały reguły, UI też to pokazuje.
 - **Śledzalność:** zdania uzasadnienia wskazują notatki źródłowe, a identyfikatory spoza przekazanych notatek są odrzucane w kodzie.
 - **Suwerenność danych:** tryb `local` (Ollama) jest domyślny. W trybie `external` imiona i nazwiska (z odmianą), PESEL, e-mail i telefon są zastępowane tokenami przed wysłaniem.
-- **Dostęp:** przełożony widzi tylko bezpośrednich podwładnych, HR widzi wyłącznie agregaty z k-anonimowością. Notatki naczelnika są domyślnie niejawne - pracownik widzi własne wpisy oraz notatki przełożonego, które ten udostępnił mu wprost (przycisk „Udostępnij podwładnemu”). Autoryzację sprawdza backend.
+- **Dostęp:** przełożony widzi tylko bezpośrednich podwładnych, HR widzi wyłącznie agregaty z k-anonimowością, a administrator tylko arkusze w trybie korekty błędów (bez dziennika, samooceny i szkiców ocen). Notatki naczelnika są domyślnie niejawne - pracownik widzi własne wpisy oraz notatki przełożonego, które ten udostępnił mu wprost (przycisk „Udostępnij podwładnemu”). Autoryzację sprawdza backend.
 - **Dostępność:** semantyczny HTML, `aria-*`, widoczny focus, etykiety pól (WCAG 2.1 AA jako cel).
 
 ## Testy

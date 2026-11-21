@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
 import { Suspense } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Providers } from "@/components/providers";
 import { Spinner } from "@/components/ui";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin", "latin-ext"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin", "latin-ext"] });
+// Typografia urzędowego dokumentu: szeryfowe nagłówki (jak w arkuszu i poradniku KPRM) + czytelny krój do pracy
+const plexSans = IBM_Plex_Sans({ variable: "--font-plex-sans", subsets: ["latin", "latin-ext"] });
+const serif = Source_Serif_4({ variable: "--font-serif-doc", subsets: ["latin", "latin-ext"] });
+const plexMono = IBM_Plex_Mono({ variable: "--font-plex-mono", subsets: ["latin", "latin-ext"], weight: ["400", "500"] });
 
 export const metadata: Metadata = {
   title: "Cyfrowy Asystent Ocen Okresowych",
@@ -21,7 +23,7 @@ export const instant = false;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pl" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="pl" className={`${plexSans.variable} ${serif.variable} ${plexMono.variable} h-full antialiased`}>
       <body className="min-h-full">
         <Providers>
           <Suspense fallback={<Spinner />}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { HeartHandshake, MessageCircleHeart, Sparkles, ThumbsUp } from "lucide-react";
+import { HeartHandshake, MessageCircleHeart, PenLine, ThumbsUp } from "lucide-react";
 import { useState } from "react";
 import { AiLabel, AiWaiting, Badge, Button, Card, CardHeader, ErrorBox } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -53,7 +53,7 @@ export function ConversationPrep({ reviewId, kind, bare }: { reviewId: number; k
         Wirtualny HR partner przygotuje cel, przebieg, pytania i wskazówki do {KIND_LABEL[kind]} na podstawie dziennika obserwacji.
       </p>
       <Button variant="ai" className="w-full" onClick={() => m.mutate()} loading={m.isPending}>
-        <Sparkles className="h-4 w-4" aria-hidden /> Przygotuj mnie do {KIND_LABEL[kind]}
+        <PenLine className="h-4 w-4" aria-hidden /> Przygotuj mnie do {KIND_LABEL[kind]}
       </Button>
       <AiWaiting active={m.isPending} typical="40–90 s" />
       <ErrorBox error={m.error} />
@@ -78,7 +78,7 @@ export function ConversationPrep({ reviewId, kind, bare }: { reviewId: number; k
 function PrepView({ prep }: { prep: Suggestion<PrepPayload> }) {
   const p = prep.payload;
   return (
-    <div className="space-y-3 rounded-md border border-violet-200 bg-violet-50/40 p-3 text-sm">
+    <div className="space-y-3 ai-draft rounded-md p-3 text-sm">
       <AiLabel model={modelLabel(prep.model)} />
       <Section title="Cel rozmowy">
         <p>{p.goal}</p>
@@ -131,7 +131,7 @@ function PrepView({ prep }: { prep: Suggestion<PrepPayload> }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h4 className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-violet-900">{title}</h4>
+      <h4 className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-ai">{title}</h4>
       {children}
     </div>
   );

@@ -1,11 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ClipboardCheck, FileSignature, GraduationCap, MessagesSquare, NotebookText, ShieldAlert, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronDown, ClipboardCheck, FileSignature, GraduationCap, MessagesSquare, NotebookText, ShieldAlert, PenLine } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { ComparePanel, DraftSuggestion, SourceChip, WarningsList } from "@/components/ai-panels";
+import { CriteriaSuggestPanel, EmployeeOpeningPrep } from "@/components/opening-ai";
 import { ConversationPrep } from "@/components/hr-partner";
 import { AdminCorrection, CriteriaStage, DeadlinesBar, DeliveryPanel, DueDateRequests, InviteButton, ObservationStage, ProcessStepper, SheetData, stepLabel } from "@/components/process";
 import { useMe } from "@/components/app-shell";
@@ -56,7 +57,7 @@ function CriterionCard({
         </div>
         {editable && (
           <Button size="sm" variant="ai" onClick={() => draft.mutate()} loading={draft.isPending}>
-            <Sparkles className="h-4 w-4" aria-hidden /> Zaproponuj uzasadnienie
+            <PenLine className="h-4 w-4" aria-hidden /> Zaproponuj uzasadnienie
           </Button>
         )}
       </div>
@@ -231,9 +232,9 @@ export default function ReviewPage() {
   const cardRefs = useRef(new Map<number, HTMLDivElement>());
 
   const { data: review, error, isPending } = useQuery({ queryKey: ["review", reviewId], queryFn: () => api<Review>(`/reviews/${reviewId}`) });
-  const isReviewer = !!review && (me?.role === "manager" || me?.role === "admin") && me?.employee_id !== review.employee.id;
+  const isReviewer = !!review && me?.role === "manager" && me?.employee_id !== review.employee.id;
   const isEmployee = !!review && me?.employee_id === review.employee.id;
-  const isHr = me?.role === "hr" || me?.role === "admin";
+  const isHr = me?.role === "hr";
   const { data: evidence } = useQuery({
     queryKey: ["evidence", reviewId],
     queryFn: () => api<Note[]>(`/reviews/${reviewId}/evidence`),
@@ -348,7 +349,9 @@ export default function ReviewPage() {
           <CriteriaStage review={review} isReviewer={criteriaEditable} isEmployee={isEmployee && viewingCurrent} onWarnings={setWarnings} />
           <aside className="space-y-4">
             {warnings && <WarningsList warnings={warnings} review={review} onShowNote={() => {}} onJump={() => {}} />}
-            {isReviewer && viewingCurrent && <ConversationPrep reviewId={review.id} kind="opening" />}
+            {/* etap I: oceniający dobiera kryteria (dane historyczne), oceniany przygotowuje się do rozmowy o celach */}
+            {isReviewer && viewingCurrent && !review.criteria_reviewer_confirmed_at && <CriteriaSuggestPanel review={review} />}
+            {isEmployee && viewingCurrent && <EmployeeOpeningPrep reviewId={review.id} />}
           </aside>
         </div>
       ) : viewStep === "observation" ? (
@@ -527,7 +530,7 @@ export default function ReviewPage() {
                     ["quality", "Kontrola jakości", ShieldAlert],
                     ["evidence", "Dowody", NotebookText],
                     ["compare", "Samoocena", MessagesSquare],
-                    ["prep", "Rozmowa", Sparkles],
+                    ["prep", "Rozmowa", PenLine],
                   ] as const
                 ).map(([key, label, Icon]) => (
                   <button
@@ -572,7 +575,7 @@ export default function ReviewPage() {
                     {review.self_assessment_submitted ? (
                       <>
                         <Button variant="ai" className="w-full" onClick={() => cmp.mutate()} loading={cmp.isPending}>
-                          <Sparkles className="h-4 w-4" aria-hidden /> Porównaj z samooceną i przygotuj pytania
+                          <PenLine className="h-4 w-4" aria-hidden /> Porównaj z samooceną i przygotuj pytania
                         </Button>
                         <AiWaiting active={cmp.isPending} />
                         <ErrorBox error={cmp.error} />
@@ -586,7 +589,7 @@ export default function ReviewPage() {
               </div>
             </Card>
             <p className="mt-3 flex items-start gap-1.5 px-1 text-xs text-muted">
-              <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-ai" aria-hidden />
+              <PenLine className="mt-0.5 h-3 w-3 shrink-0 text-ai" aria-hidden />
               AI tylko proponuje: każda propozycja wskazuje notatki źródłowe, a decyzja (akceptacja, edycja, odrzucenie) jest zapisywana w dzienniku
               zdarzeń. Ocen cząstkowych AI nie wystawia.
             </p>

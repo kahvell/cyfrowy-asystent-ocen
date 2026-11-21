@@ -107,7 +107,7 @@ def test_promotion_request_notifies_hr(client, hr, admin_h=None):
     from app.db import engine
     from app.models import Employee, Review
 
-    adm = _login(client, "admin@demo.gov.pl")
+    adm = _login(client, "marek.zielinski@demo.gov.pl")  # oceniający (przełożony) - administrator nie ocenia
     with Session(engine) as s:
         emp = s.exec(select(Employee).where(Employee.full_name == "Magdalena Kamińska")).one()
         r = s.exec(select(Review).where(Review.employee_id == emp.id, Review.status.in_(

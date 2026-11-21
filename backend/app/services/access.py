@@ -4,7 +4,9 @@
 - employee widzi tylko siebie (własne notatki oraz notatki przełożonego udostępnione mu wprost),
 - hr widzi agregaty (endpointy /analytics) oraz sporządzone arkusze (dokumentacja kadrowa, sprzeciwy),
   bez szkiców ocen i bez dziennika obserwacji,
-- admin widzi wszystko.
+- admin (administrator systemu wg schematu procesu KPRM) zakłada konta i prowadzi tryb korekty błędów:
+  czyta arkusze (szkice ocen pozostają ukryte jak dla ocenianego), nie widzi dziennika obserwacji
+  i nie działa jako oceniający.
 """
 
 from datetime import date
@@ -37,8 +39,6 @@ def direct_report_ids(session: Session, user: User) -> set[int]:
 
 
 def can_access_employee(session: Session, user: User, employee_id: int) -> bool:
-    if user.role == "admin":
-        return True
     if user.employee_id == employee_id:
         return True
     if user.role == "manager":
@@ -47,8 +47,6 @@ def can_access_employee(session: Session, user: User, employee_id: int) -> bool:
 
 
 def is_manager_of(session: Session, user: User, employee_id: int) -> bool:
-    if user.role == "admin":
-        return True
     return user.role == "manager" and employee_id in direct_report_ids(session, user)
 
 
@@ -76,6 +74,9 @@ def get_review_for(session: Session, user: User, review_id: int, *, manage: bool
         return review
     # komórka kadrowa prowadzi dokumentację ocen sporządzonych i obsługuje sprzeciwy (bez szkiców i notatek)
     if user.role == "hr" and review.status in HR_VISIBLE:
+        return review
+    # administrator: wgląd w arkusz na potrzeby trybu korekty błędów (szkice ukrywa serializacja)
+    if user.role == "admin":
         return review
     raise HTTPException(status.HTTP_403_FORBIDDEN, "Brak dostępu do tej oceny")
 

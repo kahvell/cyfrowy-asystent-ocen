@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, BookOpen, ClipboardList, IdCard, LogOut, ShieldCheck, TrendingUp, Users, UserRound } from "lucide-react";
+import { BarChart3, BookOpen, FilePenLine, IdCard, LogOut, ShieldCheck, TrendingUp, Users, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, use, useContext, useEffect, type ReactNode } from "react";
@@ -9,6 +9,7 @@ import { browser } from "react-dom";
 import { api, getToken, setToken } from "@/lib/api";
 import type { Me, SystemInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { BrandMark, BrandName } from "./brand";
 import { NotificationsBell } from "./notifications";
 import { Spinner } from "./ui";
 
@@ -17,8 +18,8 @@ export const useMe = () => useContext(MeContext);
 
 const NAV: { href: string; label: string; roles: string[]; icon: typeof Users }[] = [
   { href: "/team", label: "Mój zespół", roles: ["manager"], icon: Users },
-  { href: "/team", label: "Wszyscy pracownicy", roles: ["admin"], icon: Users },
-  { href: "/stats", label: "Statystyki ocen", roles: ["manager", "admin"], icon: TrendingUp },
+  { href: "/corrections", label: "Korekty arkuszy", roles: ["admin"], icon: FilePenLine },
+  { href: "/stats", label: "Statystyki ocen", roles: ["manager"], icon: TrendingUp },
   { href: "/me", label: "Moja ocena i rozwój", roles: ["employee", "manager"], icon: UserRound },
   { href: "/dashboard", label: "Dashboard urzędu", roles: ["hr"], icon: BarChart3 },
   { href: "/hr", label: "Kadry", roles: ["hr", "admin"], icon: IdCard },
@@ -28,6 +29,7 @@ const NAV: { href: string; label: string; roles: string[]; icon: typeof Users }[
 export function homeFor(role: string) {
   if (role === "hr") return "/dashboard";
   if (role === "employee") return "/me";
+  if (role === "admin") return "/corrections";
   return "/team";
 }
 
@@ -87,15 +89,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     <MeContext.Provider value={me}>
       <div className="flex min-h-screen flex-col">
         <header className="border-b border-border bg-white print:hidden">
-          <div className="h-1 bg-gradient-to-r from-white via-white to-accent" aria-hidden />
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-            <Link href={homeFor(me.role)} className="flex items-center gap-2">
-              <ClipboardList className="h-6 w-6 text-primary" aria-hidden />
-              <span className="font-semibold leading-tight">
-                Cyfrowy Asystent
-                <br className="hidden sm:block" />
-                <span className="text-sm font-normal text-muted"> Ocen Okresowych</span>
-              </span>
+            <Link href={homeFor(me.role)} className="flex items-center gap-2.5">
+              <BrandMark />
+              <BrandName />
             </Link>
             <nav className="flex flex-wrap gap-1" aria-label="Główna nawigacja">
               {NAV.filter((n) => n.roles.includes(me.role)).map(({ href, label, icon: Icon }) => (
@@ -123,9 +120,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
             </div>
           </div>
+          <div className="brand-rule" aria-hidden />
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 print:max-w-none print:p-0">{children}</main>
-        <footer className="border-t border-border bg-white py-3 text-center text-xs text-muted print:hidden">
+        <footer className="border-t border-border bg-white/60 py-3 text-center text-xs text-muted print:hidden">
           AI sugeruje, człowiek decyduje · ocena wg rozporządzenia PRM z 4.04.2016 r. (Dz.U. 2016 poz. 470) · dane demonstracyjne
         </footer>
       </div>

@@ -41,7 +41,7 @@ def unit_head_user(session: Session, employee: Employee) -> User | None:
 def _can_accept(session: Session, user: User, ipr: IPR) -> bool:
     emp = session.get(Employee, ipr.employee_id)
     head = unit_head_user(session, emp) if emp else None
-    return ipr.status == "established" and (user.role == "admin" or (head is not None and head.id == user.id))
+    return ipr.status == "established" and (head is not None and head.id == user.id)
 
 
 def _add_months(d: date, months: int) -> date:
@@ -155,7 +155,7 @@ def _with_rights(session: Session, user: User, ipr: IPR) -> dict:
     review = session.get(Review, ipr.review_id)
     out["can_edit"] = ipr.status == "draft" and review is not None and is_reviewer(session, user, review)
     out["can_accept"] = _can_accept(session, user, ipr)
-    out["can_approve"] = ipr.status == "accepted" and user.role in ("hr", "admin")
+    out["can_approve"] = ipr.status == "accepted" and user.role == "hr"
     return out
 
 
@@ -171,7 +171,7 @@ def get_ipr(ipr_id: int, user: User = Depends(get_current_user), session: Sessio
 @router.get("/ipr")
 def list_ipr(status: str = "accepted", user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     """Programy czekające na zatwierdzenie przez dyrektora generalnego."""
-    if user.role not in ("hr", "admin"):
+    if user.role != "hr":
         raise HTTPException(403, "Lista dla dyrektora generalnego / komórki kadrowej")
     rows = session.exec(select(IPR).where(IPR.status == status).order_by(IPR.updated_at)).all()
     return [ipr_out(session, i) for i in rows]
@@ -262,7 +262,7 @@ def accept_ipr(ipr_id: int, user: User = Depends(get_current_user), session: Ses
 @router.post("/ipr/{ipr_id}/approve")
 def approve_ipr(ipr_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     """Zatwierdzenie przez dyrektora generalnego urzędu (art. 108 ust. 2) - w systemie rola hr."""
-    if user.role not in ("hr", "admin"):
+    if user.role != "hr":
         raise HTTPException(403, "IPR zatwierdza dyrektor generalny urzędu")
     ipr = session.get(IPR, ipr_id)
     if ipr is None:

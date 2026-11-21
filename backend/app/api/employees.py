@@ -42,9 +42,9 @@ def list_employees(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    if user.role == "admin" and team == "all":
-        ids = set(session.exec(select(Employee.id)).all())
-    elif user.role in ("manager", "admin"):
+    if user.role == "admin":
+        raise HTTPException(403, "Administrator nie ma wglądu w zespoły ani dziennik obserwacji - arkusze do korekty: /reviews")
+    if user.role == "manager":
         ids = direct_report_ids(session, user)
     elif user.employee_id:
         ids = {user.employee_id}

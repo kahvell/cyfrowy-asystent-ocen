@@ -38,8 +38,8 @@ def reminders_for(session: Session, user: User, today: date | None = None, scope
     with_team = scope in ("all", "team")
     with_self = scope in ("all", "self")
 
-    if with_team and user.role in ("manager", "admin"):
-        team_ids = direct_report_ids(session, user) if user.role == "manager" else None
+    if with_team and user.role == "manager":
+        team_ids = direct_report_ids(session, user)
         q = select(Review, Employee).join(Employee, Employee.id == Review.employee_id)
         if team_ids is not None:
             q = q.where(Review.employee_id.in_(team_ids or {-1}))
@@ -116,7 +116,7 @@ def reminders_for(session: Session, user: User, today: date | None = None, scope
                     out.append(_item("objection_window", "Termin na sprzeciw od oceny",
                                      "Sprzeciw do dyrektora generalnego urzędu (art. 83 ust. 1).", od, link, today, "info"))
 
-    if with_team and user.role in ("hr", "admin"):
+    if with_team and user.role == "hr":
         for r, e in session.exec(select(Review, Employee).join(Employee, Employee.id == Review.employee_id)
                                  .where(Review.status.in_(["objection", "acknowledged"]))).all():
             link = f"/reviews/{r.id}"
@@ -134,7 +134,7 @@ def reminders_for(session: Session, user: User, today: date | None = None, scope
                                  "Dwie kolejne oceny na jednym z dwóch najwyższych poziomów (art. 89 ust. 2).",
                                  dl.promotion_deadline(r.acknowledged_at), link, today))
 
-    if with_team and user.role in ("hr", "admin"):
+    if with_team and user.role == "hr":
         for ipr, e in session.exec(select(IPR, Employee).join(Employee, Employee.id == IPR.employee_id)
                                    .where(IPR.status == "accepted")).all():
             out.append(_item("ipr_approval", f"IPR do zatwierdzenia: {e.full_name}",

@@ -13,12 +13,7 @@ import { fmtDate, STATUS_LABEL, statusTone } from "@/lib/utils";
 
 export default function TeamPage() {
   const me = useMe();
-  const isAdmin = me?.role === "admin";
-  // administrator widzi wszystkich pracowników (tryb korekty błędów w każdym arkuszu)
-  const { data, error, isPending } = useQuery({
-    queryKey: ["team", isAdmin],
-    queryFn: () => api<TeamMember[]>(`/employees?team=${isAdmin ? "all" : "mine"}`),
-  });
+  const { data, error, isPending } = useQuery({ queryKey: ["team"], queryFn: () => api<TeamMember[]>("/employees") });
   const { data: signals } = useQuery({ queryKey: ["team-hr"], queryFn: () => api<TeamSignal[]>("/team/hr-partner"), enabled: me?.role === "manager" });
   const signalOf = (id: number) => signals?.find((s) => s.employee_id === id);
 
@@ -30,12 +25,8 @@ export default function TeamPage() {
   return (
     <>
       <PageTitle
-        title={isAdmin ? "Wszyscy pracownicy" : "Mój zespół"}
-        subtitle={
-          isAdmin
-            ? "Widok administratora: otwórz arkusz, aby skorzystać z trybu korekty błędów."
-            : "Dziennik obserwacji prowadzony przez cały okres oceny chroni przed oceną „z ostatnich dwóch tygodni”."
-        }
+        title="Mój zespół"
+        subtitle="Dziennik obserwacji prowadzony przez cały okres oceny chroni przed oceną „z ostatnich dwóch tygodni”."
       />
       <Reminders scope="team" />
       {reminders.length > 0 && (

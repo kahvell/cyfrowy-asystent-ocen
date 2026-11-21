@@ -22,6 +22,10 @@ def test_access_control(client, manager, other_manager, employee, hr, admin):
     assert client.get("/analytics/overview", headers=manager).status_code == 403
     # dashboard urzędu jest tylko dla HR; administrator ma tryb korekty i panel kadrowy
     assert client.get("/analytics/overview", headers=admin).status_code == 403
+    # administrator (schemat procesu KPRM: konta + tryb korekty) nie widzi zespołów ani dziennika obserwacji
+    assert client.get("/employees?team=all", headers=admin).status_code == 403
+    assert client.get(f"/employees/{anna['id']}", headers=admin).status_code == 403
+    assert client.get(f"/employees/{anna['id']}/notes", headers=admin).status_code == 403
     # pracownik widzi notatki o sobie (przejrzystość)
     assert client.get(f"/employees/{anna['id']}/notes", headers=employee).status_code == 200
 
@@ -201,9 +205,9 @@ def test_dashboard_date_range_filter(client, hr):
 
 
 def test_team_stats_access_filtering_and_range(client, manager, other_manager, employee, hr, admin):
-    # przełożony i administrator mają dostęp; HR i pracownik - nie
+    # dostęp ma tylko przełożony; HR, administrator i pracownik - nie
     assert client.get("/analytics/team", headers=manager).status_code == 200
-    assert client.get("/analytics/team", headers=admin).status_code == 200
+    assert client.get("/analytics/team", headers=admin).status_code == 403
     assert client.get("/analytics/team", headers=hr).status_code == 403
     assert client.get("/analytics/team", headers=employee).status_code == 403
 

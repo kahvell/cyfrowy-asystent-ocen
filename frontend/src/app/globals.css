@@ -1,15 +1,18 @@
 @import "tailwindcss";
 
+/* Barwy instytucji (granat i czerwień z materiałów Departamentu Służby Cywilnej KPRM) na tle „papieru”.
+   AI nie ma „magicznego” fioletu: propozycja AI to projekt do decyzji człowieka - ochra, przerywana ramka. */
 :root {
-  --background: #f5f7fa;
-  --foreground: #1b2433;
-  --primary: #1f3f78;
-  --primary-hover: #183263;
-  --accent: #c8102e;
-  --muted: #5d6a7e;
-  --border: #dce2ea;
-  --ai: #6d28d9;
-  --ai-bg: #f5f0ff;
+  --background: #f6f4ef;
+  --foreground: #172233;
+  --primary: #1b4a7a;
+  --primary-hover: #143a61;
+  --accent: #b5342f;
+  --muted: #5a6474;
+  --border: #e0dbd0;
+  --ai: #7a5410;
+  --ai-bg: #fbf6ea;
+  --ai-border: #d9b96b;
 }
 
 @theme inline {
@@ -22,8 +25,10 @@
   --color-border: var(--border);
   --color-ai: var(--ai);
   --color-ai-bg: var(--ai-bg);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ai-border: var(--ai-border);
+  --font-sans: var(--font-plex-sans);
+  --font-serif: var(--font-serif-doc);
+  --font-mono: var(--font-plex-mono);
 }
 
 html {
@@ -33,7 +38,27 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+}
+
+/* nagłówki jak w dokumencie urzędowym */
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif-doc), Georgia, serif;
+  letter-spacing: -0.005em;
+}
+
+/* propozycja AI = projekt do decyzji: przerywana ramka w kolorze ochry */
+.ai-draft {
+  border: 1.5px dashed var(--ai-border);
+  background: var(--ai-bg);
+}
+
+/* czerwona kreska - motyw z okładki poradnika „Oceny okresowe w służbie cywilnej” */
+.brand-rule {
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary) 0 18%, var(--accent) 18% 100%);
 }
 
 /* WCAG: wyraźny focus dla nawigacji klawiaturą */

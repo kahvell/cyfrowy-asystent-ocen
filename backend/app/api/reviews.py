@@ -79,11 +79,15 @@ def list_reviews(employee_id: int | None = None, user: User = Depends(get_curren
     q = select(Review, ReviewCycle, Employee).join(ReviewCycle, ReviewCycle.id == Review.cycle_id) \
         .join(Employee, Employee.id == Review.employee_id)
     if employee_id is not None:
-        ensure_employee_access(session, user, employee_id)
+        if user.role != "admin":
+            ensure_employee_access(session, user, employee_id)
         q = q.where(Review.employee_id == employee_id)
     elif user.role == "manager":
         q = q.where(Review.reviewer_id == user.id)
-    elif user.role in ("hr", "admin"):
+    elif user.role == "admin":
+        # administrator: lista arkuszy do trybu korekty (wyniki szkiców ukryte poniżej)
+        pass
+    elif user.role == "hr":
         # komórka kadrowa: dokumentacja ocen sporządzonych (bez szkiców i notatek)
         q = q.where(Review.status.in_(["final", "acknowledged", "objection"]))
     elif user.employee_id:
@@ -204,11 +208,14 @@ class ReviewPatch(BaseModel):
 @router.patch("/reviews/{review_id}")
 def patch_review(review_id: int, body: ReviewPatch, user: User = Depends(get_current_user),
                  session: Session = Depends(get_session)):
-    review = get_review_for(session, user, review_id, manage=True)
+    # administrator nie jest oceniającym - zmienia wyłącznie pola zablokowane na danym etapie, w trybie korekty
+    correction = user.role == "admin"
+    review = get_review_for(session, user, review_id, manage=not correction)
     sent = {k for k in body.model_fields_set if not (k == "criteria" and not body.criteria)} - {"correction_reason"}
-    correction = user.role == "admin" and bool(body.correction_reason)
+    if correction and not body.correction_reason:
+        raise HTTPException(409, "Administrator zmienia arkusz wyłącznie w trybie korekty błędów - podaj powód korekty.")
     if correction:
-        allowed = CRITERIA_FIELDS | EVALUATION_FIELDS
+        allowed = (CRITERIA_FIELDS | EVALUATION_FIELDS) - editable_fields(review)
     else:
         allowed = editable_fields(review)
     blocked = sent - allowed
@@ -710,7 +717,7 @@ class ObjectionDecision(BaseModel):
 def decide_objection(review_id: int, body: ObjectionDecision, user: User = Depends(get_current_user),
                      session: Session = Depends(get_session)):
     """Rozpatrzenie sprzeciwu przez dyrektora generalnego (art. 83 ust. 3-4)."""
-    if user.role not in ("hr", "admin"):
+    if user.role != "hr":
         raise HTTPException(403, "Sprzeciw rozpatruje dyrektor generalny urzędu (komórka kadrowa)")
     review = session.get(Review, review_id)
     if review is None:
@@ -811,6 +818,8 @@ def _sa_out(sa: SelfAssessment | None, review: Review, session: Session) -> dict
 def get_self_assessment(review_id: int, user: User = Depends(get_current_user),
                         session: Session = Depends(get_session)):
     review = get_review_for(session, user, review_id)
+    if user.role == "admin":
+        raise HTTPException(403, "Samoocena nie jest częścią arkusza - administrator nie ma do niej wglądu")
     sa = session.exec(select(SelfAssessment).where(SelfAssessment.review_id == review.id)).first()
     if user.employee_id != review.employee_id and not (sa and sa.submitted_at):
         sa = None  # przełożony widzi samoocenę dopiero po jej przekazaniu

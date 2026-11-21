@@ -14,7 +14,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 # dashboard urzędu jest wyłącznie dla HR - administrator ma tryb korekty i panel kadrowy
 hr_only = require_roles("hr")
 # statystyki zespołu - przełożony (swoi podwładni) oraz administrator (tryb korekty)
-team_only = require_roles("manager", "admin")
+team_only = require_roles("manager")
 
 
 def _frame(session: Session, cycle_id: int | None, date_from: date | None, date_to: date | None) -> int | None:

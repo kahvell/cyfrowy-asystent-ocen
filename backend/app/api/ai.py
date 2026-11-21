@@ -155,7 +155,9 @@ def ai_compare_self(review_id: int, user: User = Depends(get_current_user), sess
 @router.get("/reviews/{review_id}/ai-suggestions")
 def list_suggestions(review_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     review = get_review_for(session, user, review_id, manage=True)
-    rows = session.exec(select(AISuggestion).where(AISuggestion.review_id == review.id)
+    # przygotowanie ocenianego do rozmowy jest jego własnym materiałem - oceniający go nie widzi
+    rows = session.exec(select(AISuggestion).where(AISuggestion.review_id == review.id,
+                                                   AISuggestion.kind != "employee_opening_prep")
                         .order_by(AISuggestion.created_at.desc())).all()
     return [suggestion_out(s) for s in rows]
 

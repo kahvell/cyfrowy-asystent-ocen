@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useState } from "react";
-import { useMe } from "@/components/app-shell";
 import { Badge, Button, Card, CardHeader, ErrorBox, Input, Label, PageTitle, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { TeamMember, TeamStats } from "@/lib/types";
@@ -71,15 +70,13 @@ function LevelsChart({ levels, total }: { levels: Record<string, number>; total:
 }
 
 export default function TeamStatsPage() {
-  const me = useMe();
-  const isAdmin = me?.role === "admin";
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const { data: members, error: membersError, isPending: membersPending } = useQuery({
-    queryKey: ["team-stats-members", isAdmin],
-    queryFn: () => api<TeamMember[]>(`/employees?team=${isAdmin ? "all" : "mine"}`),
+    queryKey: ["team-stats-members"],
+    queryFn: () => api<TeamMember[]>("/employees"),
   });
 
   const params = new URLSearchParams();
@@ -110,8 +107,8 @@ export default function TeamStatsPage() {
   return (
     <>
       <PageTitle
-        title={isAdmin ? "Statystyki ocen pracowników" : "Statystyki zespołu"}
-        subtitle={`Wyniki ocen okresowych ${isAdmin ? "wszystkich pracowników" : "Twoich podwładnych"} · ${summary.n_reviews} sporządzonych ocen dla ${summary.n_employees} osób`}
+        title="Statystyki zespołu"
+        subtitle={`Wyniki ocen okresowych Twoich podwładnych · ${summary.n_reviews} sporządzonych ocen dla ${summary.n_employees} osób`}
         action={<Badge tone="blue">pełne dane zespołu · bez progu k-anonimowości</Badge>}
       />
 
@@ -134,7 +131,7 @@ export default function TeamStatsPage() {
           </div>
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <Label>{isAdmin ? "Pracownicy" : "Podwładni"}</Label>
+              <Label>Podwładni</Label>
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-xs text-muted">
                   {selected.size === 0 ? "wybrano: wszyscy" : `wybrano: ${selected.size} z ${members?.length ?? 0}`}

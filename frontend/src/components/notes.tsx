@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Lock, Pencil, Plus, Share2, Sparkles, Trash2, X } from "lucide-react";
+import { Lock, Pencil, Plus, Share2, PenLine, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import type { Criterion, Note } from "@/lib/types";
@@ -45,7 +45,7 @@ export function NoteComposer({ employeeId, placeholder, managerView }: { employe
           <Plus className="h-4 w-4" aria-hidden /> Dodaj obserwację
         </Button>
         <span className="text-xs text-muted">
-          <Sparkles className="inline h-3 w-3 text-ai" aria-hidden /> AI przypisze kryteria i wydźwięk - możesz je poprawić.
+          <PenLine className="inline h-3 w-3 text-ai" aria-hidden /> AI przypisze kryteria i wydźwięk - możesz je poprawić.
         </span>
       </div>
       {managerView && (
@@ -132,7 +132,7 @@ export function NoteItem({ note, highlighted, canEdit, canDelete, canShare }: { 
             tone={t.assigned_by === "ai" ? "violet" : "slate"}
             title={t.assigned_by === "ai" ? `Przypisane przez AI (pewność ${Math.round(t.confidence * 100)}%)` : "Przypisane przez człowieka"}
           >
-            {t.assigned_by === "ai" && <Sparkles className="h-3 w-3" aria-hidden />}
+            {t.assigned_by === "ai" && <PenLine className="h-3 w-3" aria-hidden />}
             {t.name}
           </Badge>
         ))}

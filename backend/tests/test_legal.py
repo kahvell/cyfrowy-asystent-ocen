@@ -47,9 +47,11 @@ def test_art71_second_negative_for_civil_servant(client):
         s.rollback()
 
 
-def test_senior_position_has_no_ipr(client, hr, admin):
+def test_senior_position_has_no_ipr(client, hr):
     heads = [e for e in client.get("/admin/employees", headers=hr).json() if e["senior_position"]]
     assert heads, "kierujący wydziałem w urzędzie wojewódzkim to wyższe stanowisko (art. 52 pkt 2)"
+    # ocenia przełożony kierującego wydziałem (dyrektor generalny), nie administrator
+    admin = _login(client, "waclaw.zawadzki@demo.gov.pl")
     cycle = next(c for c in client.get("/cycles", headers=admin).json() if c["status"] == "open")
     from app.services.cycle import subject_to_review
 

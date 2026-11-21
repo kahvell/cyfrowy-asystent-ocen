@@ -15,6 +15,7 @@ from app.api import (
     hr_functions,
     hr_partner,
     ipr,
+    opening,
     reminders,
     reviews,
 )
@@ -52,7 +53,7 @@ app.add_middleware(
 )
 
 for r in (auth.router, employees.router, reviews.router, ai.router, ipr.router, analytics.router, assistant.router,
-          reminders.router, hr_partner.router, admin.router, hr_functions.router):
+          reminders.router, hr_partner.router, admin.router, hr_functions.router, opening.router):
     app.include_router(r)
 
 

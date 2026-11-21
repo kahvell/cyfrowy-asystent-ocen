@@ -108,6 +108,25 @@ def test_admin_correction_mode(client, manager, admin):
     assert log and log[0]["reason"] == "błąd pisarski w ustaleniach" and "opening_notes" in log[0]["fields"]
 
 
+def test_admin_is_not_a_reviewer(client, manager, admin):
+    """Administrator nie działa jako oceniający: bez dziennika, szkiców, AI i zmian pól edytowalnych na etapie."""
+    team = {e["full_name"]: e for e in client.get("/employees", headers=manager).json()}
+    draft = team["Piotr Nowak"]["current_review"]["id"]
+    assert client.get(f"/reviews/{draft}/evidence", headers=admin).status_code == 403
+    assert client.post(f"/reviews/{draft}/ai/quality-check", headers=admin).status_code == 403
+    assert client.get(f"/reviews/{draft}/self-assessment", headers=admin).status_code == 403
+    # arkusz widzi jak oceniany - szkic oceny pozostaje ukryty
+    sheet = client.get(f"/reviews/{draft}", headers=admin).json()
+    assert sheet["status"] == "draft" and all(c["score"] is None for c in sheet["criteria"])
+    # pola edytowalne przez oceniającego na bieżącym etapie nie są do korekty
+    r = client.patch(f"/reviews/{draft}", headers=admin,
+                     json={"justification": "x", "correction_reason": "próba zmiany szkicu"})
+    assert r.status_code == 409
+    # lista arkuszy do korekty obejmuje wszystkie oceny, bez wyników szkiców
+    rows = client.get("/reviews", headers=admin).json()
+    assert any(r["id"] == draft and r["overall_level"] is None for r in rows)
+
+
 def test_notifications_and_mark_read(client, employee):
     rows = client.get("/notifications", headers=employee).json()
     assert isinstance(rows, list)

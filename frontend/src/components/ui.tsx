@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, PenLine } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,8 @@ const variants: Record<Variant, string> = {
   secondary: "bg-white text-foreground border border-border hover:bg-slate-50",
   ghost: "text-foreground hover:bg-slate-100",
   danger: "bg-white text-red-700 border border-red-200 hover:bg-red-50",
-  ai: "bg-ai text-white hover:bg-violet-800",
+  // akcja AI = „przygotuj projekt”: obrys w ochrze, nie „magiczny” wypełniony przycisk
+  ai: "bg-ai-bg text-ai border border-dashed border-ai-border hover:bg-[#f5ebd2] hover:border-ai",
 };
 
 export function Button({
@@ -74,7 +75,7 @@ export function Badge({
     red: "bg-red-50 text-red-800 ring-1 ring-red-200",
     amber: "bg-amber-50 text-amber-900 ring-1 ring-amber-200",
     blue: "bg-blue-50 text-blue-800 ring-1 ring-blue-200",
-    violet: "bg-ai-bg text-ai ring-1 ring-violet-200",
+    violet: "bg-ai-bg text-ai ring-1 ring-ai-border", // ton „AI” (nazwa zachowana dla zgodności)
   };
   return (
     <span title={title} className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", tones[tone], className)}>
@@ -131,8 +132,9 @@ export function ErrorBox({ error }: { error: unknown }) {
 
 export function AiLabel({ model }: { model?: string }) {
   return (
-    <Badge tone="violet" title="Treść wygenerowana przez AI - wymaga decyzji człowieka (AI Act)">
-      <Sparkles className="h-3 w-3" aria-hidden /> Propozycja AI{model ? ` · ${model}` : ""}
+    <Badge tone="violet" className="rounded-sm font-semibold uppercase tracking-wide" title="Treść wygenerowana przez AI - wymaga decyzji człowieka (AI Act)">
+      <PenLine className="h-3 w-3" aria-hidden /> Projekt AI · do decyzji
+      {model ? <span className="font-normal normal-case tracking-normal"> · {model}</span> : null}
     </Badge>
   );
 }
