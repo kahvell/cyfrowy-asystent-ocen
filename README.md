@@ -3,7 +3,7 @@
 > HackNation 2026 · wyzwanie KPRM / Służba Cywilna
 > **AI sugeruje, człowiek decyduje.** Ocena okresowa jako narzędzie rozwoju, a nie formularz do odhaczenia.
 
-System prowadzi przełożonego i pracownika przez **cały proces oceny okresowej** zgodnie z **ustawą o służbie cywilnej (art. 81–83, 89)** i **rozporządzeniem Prezesa Rady Ministrów z 4 kwietnia 2016 r. (Dz.U. 2016 poz. 470)**: wybór arkusza A/B/C i kryteriów, rozmowa rozpoczynająca z potwierdzeniami obu stron, dziennik obserwacji przez cały okres oceny, arkusz z asystentem AI i kontrolą jakości, rozmowa oceniająca, podpisy i zapoznanie (również fikcja zapoznania), sprzeciw, wniosek o stopień służbowy, IPR i **wydruk arkusza zgodny ze wzorem**. Terminy liczy kod wg zasad KPRM (dni wolne, nieobecności). **Wirtualny HR partner** przygotowuje przełożonego do rozmów i podpowiada, kiedy wesprzeć lub docenić pracownika. Dyrektor generalny i HR dostają zagregowany obraz urzędu.
+System prowadzi przełożonego i pracownika przez **cały proces oceny okresowej** zgodnie z **ustawą o służbie cywilnej (art. 81–83, 89)** i **rozporządzeniem Prezesa Rady Ministrów z 4 kwietnia 2016 r. (Dz.U. 2016 poz. 470)**: wybór arkusza A/B/C i kryteriów, rozmowa rozpoczynająca z potwierdzeniami obu stron, dziennik obserwacji przez cały okres oceny, arkusz z asystentem AI i kontrolą jakości, rozmowa oceniająca, podpisy i zapoznanie (również fikcja zapoznania), sprzeciw, wniosek o stopień służbowy, IPRZ i **wydruk arkusza zgodny ze wzorem**. Terminy liczy kod wg zasad KPRM (dni wolne, nieobecności). **Wirtualny HR partner** przygotowuje przełożonego do rozmów i podpowiada, kiedy wesprzeć lub docenić pracownika. Dyrektor generalny i HR dostają zagregowany obraz urzędu.
 
 Całość działa **lokalnie, bez chmury**. Model językowy (Bielik / PLLuM przez Ollamę) uruchamia się na serwerze urzędu, więc dane osobowe go nie opuszczają.
 
@@ -14,9 +14,9 @@ Całość działa **lokalnie, bez chmury**. Model językowy (Bielik / PLLuM prze
 | Ocena pisana z pamięci z ostatnich tygodni | **Dziennik obserwacji** przez cały okres. AI przypisuje notatki do kryteriów z rozporządzenia, a przełożony może je poprawić. System przypomina o pracownikach bez notatek od 3 miesięcy. |
 | Ogólniki („pracuje dobrze”) | **Propozycja uzasadnienia** złożona z notatek. Każde zdanie wskazuje notatki źródłowe (klikalne `#id`), więc AI nie dopisuje osiągnięć, których nie było. |
 | Efekt świeżości, efekt halo, stronniczy język | **Kontrola jakości**: reguły w kodzie (efekt świeżości, halo, brak dowodów, niespójność ocen z notatkami, skrajne oceny bez uzasadnienia) oraz słownik i LLM do ogólników i języka stronniczego (płeć, wiek, zdrowie, rodzina, osobowość zamiast zachowań). |
-| Kryteria dobierane „z automatu”, a pracownik bierny w rozmowie rozpoczynającej | **Etap I z AI po obu stronach.** Przełożony dostaje propozycję kryteriów dodatkowych (maks. 3, § 5 ust. 2) z danych historycznych: opis stanowiska, słabsze wyniki z poprzedniej oceny, cele z IPR, kryteria wybierane dla tego samego stanowiska. Dowody liczy kod, model tylko uzasadnia, a decyzja trafia do dziennika zdarzeń. Pracownik dostaje własne przygotowanie do rozmowy: co znaczą kryteria i o co zapytać, jak przedstawić swoje cele, jak rzeczowo zgodzić się albo nie zgodzić z kryterium. Przełożony tego materiału nie widzi. |
+| Kryteria dobierane „z automatu”, a pracownik bierny w rozmowie rozpoczynającej | **Etap I z AI po obu stronach.** Przełożony dostaje propozycję kryteriów dodatkowych (maks. 3, § 5 ust. 2) z danych historycznych: opis stanowiska, słabsze wyniki z poprzedniej oceny, cele z IPRZ, kryteria wybierane dla tego samego stanowiska. Dowody liczy kod, model tylko uzasadnia, a decyzja trafia do dziennika zdarzeń. Pracownik dostaje własne przygotowanie do rozmowy: co znaczą kryteria i o co zapytać, jak przedstawić swoje cele, jak rzeczowo zgodzić się albo nie zgodzić z kryterium. Przełożony tego materiału nie widzi. |
 | Rozmowa oceniająca jako formalność | **Porównanie z samooceną** i pytania do rozmowy (§ 10), zaczynając od największych rozbieżności. |
-| IPR pisany „na odczepnego” | **Generator IPR**: cele, działania, mierniki i terminy dla słabszych kryteriów oraz szkolenia z katalogu urzędu. Po zatwierdzeniu wnioski trafiają do arkusza (§ 11 ust. 1 pkt 5). |
+| IPRZ pisany „na odczepnego” | **Generator IPRZ**: cele, działania, mierniki i terminy dla słabszych kryteriów oraz szkolenia z katalogu urzędu. Po zatwierdzeniu wnioski trafiają do arkusza (§ 11 ust. 1 pkt 5). |
 | „Wszyscy dostają bardzo dobry” | **Dashboard HR**: rozkład ocen w komórkach, kalibracja oceniających (łagodny / surowy), luki kompetencyjne, porównanie średnich K/M, adopcja AI. Tylko agregaty z k-anonimowością (grupy poniżej 5 osób są ukryte). |
 | „Czy ja muszę…?” | **Asystent przepisów**: odpowiedzi z cytatem z ustawy i rozporządzenia (RAG). |
 | Pilnowanie terminów i formalności | **Kalkulator terminów i przypomnienia**: 30/7 dni na kryteria, 24 miesiące na ocenę (przedłużenie o nieobecności > 1 mies.), 7 dni na sprzeciw, 14 dni na jego rozpatrzenie, ponowna ocena po 6 mies., obligatoryjny stopień w 30 dni. Blokady kroków, gdy brakuje wymaganych elementów. |
@@ -33,7 +33,7 @@ To jest liczone w kodzie, nie przez LLM, i pokryte testami (`backend/tests/test_
 - 14 kryteriów z opisami z **załącznika nr 1**, arkusze **A, B i C** z kryteriami obowiązkowymi (§ 3–4), maksymalnie **3 kryteria dodatkowe** (§ 5 ust. 2),
 - skala ocen cząstkowych **1 / 3 / 5 / 7 / 9 pkt** i progi ogólnego poziomu (§ 11 ust. 1 pkt 1–2),
 - ocena negatywna przy średniej ≤ 4 **albo** przy choćby jednej ocenie cząstkowej „znacznie poniżej oczekiwań” (§ 11 ust. 1 pkt 4),
-- obowiązkowe uzasadnienie oceny negatywnej (§ 11 ust. 3) i obowiązkowe wnioski do IPR przed zatwierdzeniem (§ 11 ust. 1 pkt 5),
+- obowiązkowe uzasadnienie oceny negatywnej (§ 11 ust. 3) i obowiązkowe wnioski do IPRZ przed zatwierdzeniem (§ 11 ust. 1 pkt 5),
 - proces: **kryteria i rozmowa rozpoczynająca (§ 5, podpisy obu stron) → okres oceny → przygotowanie → rozmowa oceniająca (§ 10) → ocena na piśmie (§ 11) → zapoznanie lub fikcja zapoznania → sprzeciw (art. 83)**; pola arkusza są edytowalne tylko na etapach wskazanych w „schemacie pól formularza” KPRM,
 - część III arkusza: wniosek o kolejny stopień służbowy tylko dla urzędnika z oceną pozytywną (art. 89 ust. 1), z obowiązkowym umotywowaniem; przypomnienie o stopniu obligatoryjnym (art. 89 ust. 2),
 - terminy wg zasad obliczania terminów KPRM (`backend/app/services/deadlines.py`, testy na przykładach z materiału).
@@ -44,7 +44,7 @@ Kryteria są danymi, a nie kodem (`backend/seed/criteria.json`), a terminy (24 m
 
 Zweryfikowane z materiałami KPRM: **rozporządzenie PRM z 4.04.2016 (Dz.U. 2016 poz. 470)** w całości (§ 1–13, załącznik nr 1 porównany automatycznie słowo w słowo, objaśnienia wzorów arkuszy A, B, C), **ustawa o służbie cywilnej** (art. 37–38, 52, 71, 81–84, 89, 108–109) i **Standardy ZZL** (zarządzenie nr 6 Szefa Służby Cywilnej z 12.03.2020). Fragmenty przepisów w asystencie pochodzą dosłownie z tych aktów (`backend/seed/legal`).
 
-W systemie zaimplementowane m.in.: termin kryteriów 30/7 dni (§ 7), zmiana stanowiska (§ 9, art. 81 ust. 6), „okres od–do” wg objaśnień do arkusza, ostrzeżenie o drugiej z rzędu ocenie negatywnej urzędnika (art. 71 ust. 1 pkt 1), IPR: ustala przełożony → akceptuje kierujący komórką → zatwierdza dyrektor generalny (art. 108 ust. 2), brak IPR dla wyższych stanowisk (art. 52), informacja zwrotna bieżąca i cykliczna, wprowadzenie nowego pracownika, ocena na wniosek odchodzącego pracownika (Standardy ZZL).
+W systemie zaimplementowane m.in.: termin kryteriów 30/7 dni (§ 7), zmiana stanowiska (§ 9, art. 81 ust. 6), „okres od–do” wg objaśnień do arkusza, ostrzeżenie o drugiej z rzędu ocenie negatywnej urzędnika (art. 71 ust. 1 pkt 1), IPRZ: ustala przełożony → akceptuje kierujący komórką → zatwierdza dyrektor generalny (art. 108 ust. 2), brak IPRZ dla wyższych stanowisk (art. 52), informacja zwrotna bieżąca i cykliczna, wprowadzenie nowego pracownika, ocena na wniosek odchodzącego pracownika (Standardy ZZL).
 
 **Poza zakresem:** *pierwsza ocena w służbie cywilnej* (art. 37–38, pracownicy na umowie na czas określony) - odrębny tryb i wzór arkusza z innego rozporządzenia, którego nie ma w materiałach wyzwania; nabór, wynagrodzenia, nagrody i postępowanie dyscyplinarne.
 
@@ -105,9 +105,9 @@ administrator lub HR ustawia go w polu **E-mail** przy dodawaniu i edycji pracow
 
 | Rola | E-mail | Co zobaczysz |
 |---|---|---|
-| Przełożony | `marek.zielinski@demo.gov.pl` | Marek Zieliński, Wydział Cyfryzacji: każdy etap procesu na innej osobie, przypomnienia, asystent AI, HR partner, IPR |
-| Pracownik | `anna.kowalska@demo.gov.pl` | Anna Kowalska: samoocena, potwierdzenia, zapoznanie z oceną, sprzeciw, wniosek o zmianę terminu, IPR |
-| HR | `hr@demo.gov.pl` | Kadry (pracownicy, schemat urzędu, zastępstwa, import, zestawienia), sprzeciwy, zatwierdzanie IPR, dashboard |
+| Przełożony | `marek.zielinski@demo.gov.pl` | Marek Zieliński, Wydział Cyfryzacji: każdy etap procesu na innej osobie, przypomnienia, asystent AI, HR partner, IPRZ |
+| Pracownik | `anna.kowalska@demo.gov.pl` | Anna Kowalska: samoocena, potwierdzenia, zapoznanie z oceną, sprzeciw, wniosek o zmianę terminu, IPRZ |
+| HR | `hr@demo.gov.pl` | Kadry (pracownicy, schemat urzędu, zastępstwa, import, zestawienia), sprzeciwy, zatwierdzanie IPRZ, dashboard |
 | Dyrektor generalny | `waclaw.zawadzki@demo.gov.pl` | Wacław Zawadzki: przełożony naczelników wydziałów - ocenia ich (arkusz B); na `/me` widzi własną ocenę okresową |
 | Administrator | `admin@demo.gov.pl` | konta użytkowników i **tryb korekty błędów** w arkuszach (z powodem i historią) - wg schematu procesu KPRM; bez wglądu w dziennik obserwacji, samoocenę i szkice ocen, nie działa jako oceniający |
 | Przełożona | `ewa.dabrowska@demo.gov.pl` | Ewa Dąbrowska: „łagodna” oceniająca na dashboardzie; po wprowadzeniu zastępstwa przejmuje zespół Marka |

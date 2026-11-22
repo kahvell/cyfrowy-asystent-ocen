@@ -9,7 +9,7 @@ Pierwotny diagram w ARCHITECTURE.md zakładał kolejność `draft → submitted 
 - `draft`: przygotowanie oceny,
 - `submitted`: gotowa do rozmowy (wymaga braku krytycznych ostrzeżeń kontroli jakości),
 - `discussed`: po rozmowie oceniającej (data rozmowy); ocenę można jeszcze skorygować,
-- `final`: ocena sporządzona na piśmie (wymaga kompletu ocen, uzasadnienia przy ocenie negatywnej i wniosków do IPR).
+- `final`: ocena sporządzona na piśmie (wymaga kompletu ocen, uzasadnienia przy ocenie negatywnej i wniosków do IPRZ).
 
 Samoocenę pracownik może wypełnić do chwili zatwierdzenia oceny. Przełożony widzi ją dopiero po przekazaniu, a pracownik widzi oceny przełożonego dopiero od statusu `submitted`.
 

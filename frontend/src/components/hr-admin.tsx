@@ -461,7 +461,7 @@ export function ExportPanel() {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card>
-        <CardHeader title="Zestawienie do archiwizacji lub kontroli" subtitle="Wszystkie sporządzone oceny z datami, ocenami cząstkowymi, uzasadnieniem, wnioskami do IPR i sprzeciwami (CSV, otwiera się w Excelu)." />
+        <CardHeader title="Zestawienie do archiwizacji lub kontroli" subtitle="Wszystkie sporządzone oceny z datami, ocenami cząstkowymi, uzasadnieniem, wnioskami do IPRZ i sprzeciwami (CSV, otwiera się w Excelu)." />
         <div className="space-y-3 p-5 text-sm">
           <div className="flex flex-wrap gap-2">
             <div>

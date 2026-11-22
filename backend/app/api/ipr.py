@@ -1,8 +1,8 @@
-"""Indywidualny Program Rozwoju Zawodowego (IPR) - art. 108 ustawy o służbie cywilnej.
+"""Indywidualny Program Rozwoju Zawodowego (IPRZ) - art. 108 ustawy o służbie cywilnej.
 
-Bezpośredni przełożony ustala IPR (m.in. na podstawie wniosków z oceny okresowej), program akceptuje
+Bezpośredni przełożony ustala IPRZ (m.in. na podstawie wniosków z oceny okresowej), program akceptuje
 osoba kierująca komórką organizacyjną, a zatwierdza dyrektor generalny urzędu (w systemie: rola hr).
-Wnioski do IPR trafiają do arkusza oceny w chwili ustalenia programu (§ 11 ust. 1 pkt 5 rozporządzenia).
+Wnioski do IPRZ trafiają do arkusza oceny w chwili ustalenia programu (§ 11 ust. 1 pkt 5 rozporządzenia).
 """
 
 from datetime import date
@@ -83,13 +83,13 @@ def generate(review_id: int, user: User = Depends(get_current_user), session: Se
     review = get_review_for(session, user, review_id, manage=True)
     emp = session.get(Employee, review.employee_id)
     if emp and emp.senior_position:
-        raise HTTPException(409, "Osoby na wyższych stanowiskach w służbie cywilnej (art. 52) nie mają IPR "
+        raise HTTPException(409, "Osoby na wyższych stanowiskach w służbie cywilnej (art. 52) nie mają IPRZ "
                                  "(art. 108 ust. 1). Wnioski dotyczące rozwoju zawodowego wpisz bezpośrednio w arkuszu "
                                  "(art. 81 ust. 5).")
     entries = review_entries(session, review)
     scored = [(rc, c) for rc, c in entries if rc.score is not None]
     if not scored:
-        raise HTTPException(409, "Najpierw wystaw oceny cząstkowe - IPR opiera się na słabszych kryteriach")
+        raise HTTPException(409, "Najpierw wystaw oceny cząstkowe - IPRZ opiera się na słabszych kryteriach")
     weak = sorted([x for x in scored if x[0].score <= 5], key=lambda x: x[0].score)[:3]
     focus = weak or sorted(scored, key=lambda x: x[0].score)[:2]
     focus_ctx = [{"code": c.code, "name": c.name, "score": rc.score, "justification": rc.justification}
@@ -106,7 +106,7 @@ def generate(review_id: int, user: User = Depends(get_current_user), session: Se
 
     ipr = session.exec(select(IPR).where(IPR.review_id == review.id)).first()
     if ipr and ipr.status != "draft":
-        raise HTTPException(409, "IPR jest już zatwierdzony")
+        raise HTTPException(409, "IPRZ jest już zatwierdzony")
     sugg = AISuggestion(review_id=review.id, kind="ipr", payload=res.data.model_dump(), model=res.model,
                         prompt_version=res.prompt_version, created_by=user.id)
     session.add(sugg)
@@ -141,7 +141,7 @@ def generate(review_id: int, user: User = Depends(get_current_user), session: Se
 def _get_ipr(session: Session, user: User, ipr_id: int, manage: bool = False) -> IPR:
     ipr = session.get(IPR, ipr_id)
     if ipr is None:
-        raise HTTPException(404, "Nie ma takiego IPR")
+        raise HTTPException(404, "Nie ma takiego IPRZ")
     if not manage and user.role == "hr" and ipr.status in ("accepted", "approved"):
         return ipr  # dyrektor generalny / komórka kadrowa: zatwierdzenie programu
     if not manage and ipr.status in ("established", "accepted") and _can_accept(session, user, ipr):
@@ -164,7 +164,7 @@ def get_ipr(ipr_id: int, user: User = Depends(get_current_user), session: Sessio
     ipr = _get_ipr(session, user, ipr_id)
     review = session.get(Review, ipr.review_id)
     if user.employee_id == review.employee_id and ipr.status not in VISIBLE_TO_EMPLOYEE:
-        raise HTTPException(403, "IPR będzie widoczny po ustaleniu go przez przełożonego")
+        raise HTTPException(403, "IPRZ będzie widoczny po ustaleniu go przez przełożonego")
     return _with_rights(session, user, ipr)
 
 
@@ -197,7 +197,7 @@ def patch_ipr(ipr_id: int, body: IPRPatch, user: User = Depends(get_current_user
               session: Session = Depends(get_session)):
     ipr = _get_ipr(session, user, ipr_id, manage=True)
     if ipr.status != "draft":
-        raise HTTPException(409, "IPR został już ustalony - zmiany wymagają nowego programu")
+        raise HTTPException(409, "IPRZ został już ustalony - zmiany wymagają nowego programu")
     if body.summary is not None:
         ipr.summary = body.summary
     if body.goals is not None:
@@ -229,10 +229,10 @@ def patch_ipr(ipr_id: int, body: IPRPatch, user: User = Depends(get_current_user
         if head is not None and head.id == user.id:
             # przełożony jest jednocześnie kierującym komórką - ustalenie i akceptacja w jednym kroku
             ipr.status, ipr.accepted_at, ipr.accepted_by = "accepted", utcnow(), user.id
-            notify_hr(session, f"IPR do zatwierdzenia: {emp.full_name}", "Art. 108 ust. 2 ustawy o służbie cywilnej.",
+            notify_hr(session, f"IPRZ do zatwierdzenia: {emp.full_name}", "Art. 108 ust. 2 ustawy o służbie cywilnej.",
                       f"/ipr/{ipr.id}")
         elif head is not None:
-            notify(session, head.id, f"IPR do akceptacji: {emp.full_name}", "Art. 108 ust. 2 ustawy.", f"/ipr/{ipr.id}")
+            notify(session, head.id, f"IPRZ do akceptacji: {emp.full_name}", "Art. 108 ust. 2 ustawy.", f"/ipr/{ipr.id}")
     ipr.updated_at = utcnow()
     session.add(ipr)
     audit(session, user, "update", "ipr", ipr.id, status=ipr.status)
@@ -246,13 +246,13 @@ def accept_ipr(ipr_id: int, user: User = Depends(get_current_user), session: Ses
     """Akceptacja przez osobę kierującą komórką organizacyjną (art. 108 ust. 2)."""
     ipr = session.get(IPR, ipr_id)
     if ipr is None:
-        raise HTTPException(404, "Nie ma takiego IPR")
+        raise HTTPException(404, "Nie ma takiego IPRZ")
     if not _can_accept(session, user, ipr):
-        raise HTTPException(403, "IPR akceptuje osoba kierująca komórką organizacyjną (po ustaleniu programu)")
+        raise HTTPException(403, "IPRZ akceptuje osoba kierująca komórką organizacyjną (po ustaleniu programu)")
     ipr.status, ipr.accepted_at, ipr.accepted_by, ipr.updated_at = "accepted", utcnow(), user.id, utcnow()
     session.add(ipr)
     emp = session.get(Employee, ipr.employee_id)
-    notify_hr(session, f"IPR do zatwierdzenia: {emp.full_name if emp else ''}", "Art. 108 ust. 2 ustawy.", f"/ipr/{ipr.id}")
+    notify_hr(session, f"IPRZ do zatwierdzenia: {emp.full_name if emp else ''}", "Art. 108 ust. 2 ustawy.", f"/ipr/{ipr.id}")
     audit(session, user, "accept", "ipr", ipr.id)
     session.commit()
     session.refresh(ipr)
@@ -263,19 +263,19 @@ def accept_ipr(ipr_id: int, user: User = Depends(get_current_user), session: Ses
 def approve_ipr(ipr_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     """Zatwierdzenie przez dyrektora generalnego urzędu (art. 108 ust. 2) - w systemie rola hr."""
     if user.role != "hr":
-        raise HTTPException(403, "IPR zatwierdza dyrektor generalny urzędu")
+        raise HTTPException(403, "IPRZ zatwierdza dyrektor generalny urzędu")
     ipr = session.get(IPR, ipr_id)
     if ipr is None:
-        raise HTTPException(404, "Nie ma takiego IPR")
+        raise HTTPException(404, "Nie ma takiego IPRZ")
     if ipr.status != "accepted":
-        raise HTTPException(409, "IPR musi być najpierw ustalony przez przełożonego i zaakceptowany przez kierującego komórką")
+        raise HTTPException(409, "IPRZ musi być najpierw ustalony przez przełożonego i zaakceptowany przez kierującego komórką")
     ipr.status, ipr.approved_at, ipr.approved_by, ipr.updated_at = "approved", utcnow(), user.id, utcnow()
     session.add(ipr)
     review = session.get(Review, ipr.review_id)
     if review:
         notify_employee(session, review, "Zatwierdzono Twój indywidualny program rozwoju zawodowego",
                         "Program jest podstawą kierowania na szkolenia (art. 108 ustawy o służbie cywilnej).")
-        notify(session, review.reviewer_id, "Zatwierdzono IPR", "", f"/ipr/{ipr.id}")
+        notify(session, review.reviewer_id, "Zatwierdzono IPRZ", "", f"/ipr/{ipr.id}")
     audit(session, user, "approve", "ipr", ipr.id)
     session.commit()
     session.refresh(ipr)
@@ -297,7 +297,7 @@ class SmartIn(BaseModel):
 @router.post("/ipr/{ipr_id}/ai/smart-check")
 def ai_smart_check(ipr_id: int, body: SmartIn, user: User = Depends(get_current_user),
                    session: Session = Depends(get_session)):
-    """Sprawdzenie celów IPR wg SMART (reguły w kodzie) z propozycją lepszych sformułowań (model).
+    """Sprawdzenie celów IPRZ wg SMART (reguły w kodzie) z propozycją lepszych sformułowań (model).
     Bierze cele z formularza - także te jeszcze niezapisane. Decyzja o zmianie należy do przełożonego."""
     ipr = _get_ipr(session, user, ipr_id, manage=True)
     emp = session.get(Employee, ipr.employee_id)

@@ -48,7 +48,7 @@ class Employee(SQLModel, table=True):
     civil_grade: int | None = None       # posiadany stopień służbowy 1-9 (art. 89)
     civil_grade_date: date | None = None
     active: bool = True                   # False po ustaniu stosunku pracy (dane w archiwum akt)
-    # wyższe stanowisko w służbie cywilnej (art. 52 ustawy) - bez IPR (art. 108 ust. 1)
+    # wyższe stanowisko w służbie cywilnej (art. 52 ustawy) - bez IPRZ (art. 108 ust. 1)
     senior_position: bool = False
     employment_end: date | None = None
 
@@ -256,7 +256,7 @@ class AISuggestion(SQLModel, table=True):
     decided_at: NaiveDatetime | None = None
 
 
-# --- IPR ------------------------------------------------------------------------------
+# --- IPRZ ------------------------------------------------------------------------------
 
 
 class Training(SQLModel, table=True):

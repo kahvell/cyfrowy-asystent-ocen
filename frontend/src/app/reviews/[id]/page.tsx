@@ -156,7 +156,7 @@ function ReadOnlyReview({ review }: { review: Review }) {
       {review.ipr_id && (
         <Link href={`/ipr/${review.ipr_id}`}>
           <Button variant="secondary">
-            <GraduationCap className="h-4 w-4" aria-hidden /> Mój plan rozwoju (IPR)
+            <GraduationCap className="h-4 w-4" aria-hidden /> Mój plan rozwoju (IPRZ)
           </Button>
         </Link>
       )}
@@ -433,18 +433,18 @@ export default function ReviewPage() {
                 <div>
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-sm font-medium">
-                      Wnioski dotyczące IPR (§ 11 ust. 1 pkt 5)
+                      Wnioski dotyczące IPRZ (§ 11 ust. 1 pkt 5)
                       <Req />
                     </span>
                     {review.employee.senior_position ? (
-                      <Badge tone="slate" title="Art. 108 ust. 1 ustawy o służbie cywilnej">wyższe stanowisko: bez IPR (art. 108)</Badge>
+                      <Badge tone="slate" title="Art. 108 ust. 1 ustawy o służbie cywilnej">wyższe stanowisko: bez IPRZ (art. 108)</Badge>
                     ) : review.ipr_id ? (
                       <Link href={`/ipr/${review.ipr_id}`} className="text-sm text-primary hover:underline">
-                        otwórz IPR →
+                        otwórz IPRZ →
                       </Link>
                     ) : (
                       <Button size="sm" variant="ai" onClick={() => genIpr.mutate()} loading={genIpr.isPending} disabled={!review.summary}>
-                        <GraduationCap className="h-4 w-4" aria-hidden /> Zaproponuj IPR
+                        <GraduationCap className="h-4 w-4" aria-hidden /> Zaproponuj IPRZ
                       </Button>
                     )}
                   </div>
@@ -452,7 +452,7 @@ export default function ReviewPage() {
                     <IprConclusions key={review.ipr_conclusions} review={review} editable={editable} />
                   ) : (
                     <p className={cn("whitespace-pre-line rounded-md p-3 text-sm text-slate-700", review.ipr_conclusions ? "bg-slate-50" : "border border-amber-400 bg-amber-50")}>
-                      {review.ipr_conclusions || "Pojawią się po ustaleniu IPR przez przełożonego (art. 108 ustawy)."}
+                      {review.ipr_conclusions || "Pojawią się po ustaleniu IPRZ przez przełożonego (art. 108 ustawy)."}
                     </p>
                   )}
                   <AiWaiting active={genIpr.isPending} typical="60–120 s" />

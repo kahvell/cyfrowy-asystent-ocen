@@ -198,7 +198,7 @@ function EmployeeForm({ emp, structure, onDone }: { emp?: HrEmployee; structure:
       </div>
       <label className="flex items-center gap-2 text-sm sm:col-span-2">
         <input type="checkbox" checked={f.senior_position} onChange={(e) => set("senior_position", e.target.checked)} /> wyższe stanowisko w służbie cywilnej
-        (art. 52, np. dyrektor generalny, kierujący wydziałem w urzędzie wojewódzkim) - bez IPR (art. 108)
+        (art. 52, np. dyrektor generalny, kierujący wydziałem w urzędzie wojewódzkim) - bez IPRZ (art. 108)
       </label>
       {f.is_civil_servant && (
         <div className="grid gap-3 sm:col-span-2 sm:grid-cols-3">

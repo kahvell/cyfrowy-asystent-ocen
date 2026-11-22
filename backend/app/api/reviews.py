@@ -128,7 +128,7 @@ def create_review(body: ReviewCreate, user: User = Depends(get_current_user), se
 
 SENIOR_NOTICE = ("Oceniany zajmuje wyższe stanowisko w służbie cywilnej (art. 52). Wg poradnika KPRM (rozdz. 3) takie "
                  "osoby nie podlegają ocenie okresowej z art. 81 - cykl nie startuje automatycznie, a ocena założona "
-                 "ręcznie ma charakter oceny wg praktyki urzędu; IPR nie jest sporządzany (art. 108).")
+                 "ręcznie ma charakter oceny wg praktyki urzędu; IPRZ nie jest sporządzany (art. 108).")
 
 
 @router.get("/reviews/{review_id}")
@@ -568,9 +568,9 @@ def finalize_problems(session: Session, review: Review, today: date | None = Non
                              f"({date.fromisoformat(pc['changed']).strftime('%d.%m.%Y')}) - § 9 ust. 2 rozporządzenia.",
                              f"Sporządź ocenę od {date.fromisoformat(pc['earliest']).strftime('%d.%m.%Y')}."))
     if not review.ipr_conclusions.strip():
-        warnings.append(_err("missing_ipr", "Brak wniosków do IPR",
-                             "Arkusz musi zawierać wnioski dotyczące IPR (art. 81 ust. 5, § 11 ust. 1 pkt 5).",
-                             "Wygeneruj i zatwierdź IPR."))
+        warnings.append(_err("missing_ipr", "Brak wniosków do IPRZ",
+                             "Arkusz musi zawierać wnioski dotyczące IPRZ (art. 81 ust. 5, § 11 ust. 1 pkt 5).",
+                             "Wygeneruj i zatwierdź IPRZ."))
     if not review.conversation_date:
         warnings.append(_err("missing_conversation", "Brak daty rozmowy oceniającej", "Uzupełnij datę rozmowy (§ 10)."))
     if review.promotion_request == "tak":
@@ -638,7 +638,7 @@ def finalize(review_id: int, body: PlaceIn | None = None, user: User = Depends(g
 @router.post("/reviews/{review_id}/acknowledge")
 def acknowledge(review_id: int, body: PlaceIn | None = None, user: User = Depends(get_current_user),
                 session: Session = Depends(get_session)):
-    """Oceniany potwierdza odbycie rozmowy i zapoznanie się z oceną oraz wnioskami do IPR."""
+    """Oceniany potwierdza odbycie rozmowy i zapoznanie się z oceną oraz wnioskami do IPRZ."""
     review = get_review_for(session, user, review_id)
     if user.employee_id != review.employee_id:
         raise HTTPException(403, "Zapoznanie z oceną potwierdza oceniany")
@@ -897,7 +897,7 @@ def invite_ics(review_id: int, kind: Literal["opening", "assessment", "feedback"
               "assessment": "Rozmowa oceniająca (§ 10 rozporządzenia)",
               "feedback": "Rozmowa - bieżąca informacja zwrotna"}
     desc = {"opening": "Omówimy obowiązki z opisu stanowiska, kryteria oceny, oczekiwania i cele na okres oceny.",
-            "assessment": "Omówimy wyniki z okresu oceny, Twoją samoocenę i kierunki rozwoju (wnioski do IPR). "
+            "assessment": "Omówimy wyniki z okresu oceny, Twoją samoocenę i kierunki rozwoju (wnioski do IPRZ). "
                           "Jeśli jeszcze jej nie wypełniłeś(-aś), możesz przygotować samoocenę w systemie.",
             "feedback": "Krótka rozmowa o bieżącej pracy: co działa, co poprawić, jakiego wsparcia potrzebujesz."}
 

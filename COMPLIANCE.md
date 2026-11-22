@@ -83,7 +83,7 @@ Status: **zgodne** co do struktury i reguł pól.
 ## Folder 5 — Przykładowe wypełnione formularze oceny
 
 Przykładowe arkusze A/B/C z realnymi danymi. Render wydruku odwzorowuje układ wzoru, a przykładowe
-dane mieszczą się w polach modelu (oceny cząstkowe, uzasadnienia, IPR, dane stron, część III).
+dane mieszczą się w polach modelu (oceny cząstkowe, uzasadnienia, IPRZ, dane stron, część III).
 
 Status: **zgodne.**
 

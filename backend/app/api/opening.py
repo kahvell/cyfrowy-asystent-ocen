@@ -1,7 +1,7 @@
 """Etap I oceny (§ 5 rozporządzenia): wsparcie AI przy wyznaczaniu kryteriów i rozmowie rozpoczynającej.
 
 - oceniający: propozycja kryteriów dodatkowych (maks. 3) na bazie danych historycznych - opis stanowiska,
-  poprzednia ocena i IPR, wybory kryteriów dla tego samego stanowiska w urzędzie. Sygnały liczy kod (jawne
+  poprzednia ocena i IPRZ, wybory kryteriów dla tego samego stanowiska w urzędzie. Sygnały liczy kod (jawne
   i sprawdzalne), model tylko je porządkuje i uzasadnia. Wybór zawsze należy do oceniającego.
 - oceniany: jak przygotować się do rozmowy - zrozumieć kryteria, przedstawić własne cele, rzeczowo zgodzić się
   albo nie zgodzić z kryterium. Bez dostępu do dziennika obserwacji przełożonego.
@@ -84,13 +84,13 @@ def criteria_signals(session: Session, review: Review) -> tuple[Employee, list[C
                 candidates[rc.criterion_id]["signals"].append(_signal(
                     "prev_chosen", 1.0,
                     f"Wybrane w poprzedniej ocenie ({label})" + (f": {rc.score} pkt" if rc.score else "")))
-        # 3) cele z poprzedniego IPR powiązane z kryterium
+        # 3) cele z poprzedniego IPRZ powiązane z kryterium
         ipr = session.exec(select(IPR).where(IPR.review_id == prev.id)).first()
         if ipr is not None:
             for g in session.exec(select(IPRGoal).where(IPRGoal.ipr_id == ipr.id)).all():
                 if g.criterion_id in candidates:
                     candidates[g.criterion_id]["signals"].append(_signal(
-                        "ipr", 2.5, f"Cel z poprzedniego IPR: „{g.goal[:90]}”"))
+                        "ipr", 2.5, f"Cel z poprzedniego IPRZ: „{g.goal[:90]}”"))
 
     # 4) wybory kryteriów dodatkowych dla tego samego stanowiska w urzędzie (bez danych o ocenach innych osób)
     peers = session.exec(select(Employee.id).where(Employee.position == emp.position, Employee.id != emp.id)).all()
@@ -271,7 +271,7 @@ JOHARI = {
     "facade": {"title": "Fasada", "subtitle": "pracownik widzi więcej niż Ty",
                "tip": "Zapytaj o przykłady - mogłeś czegoś nie zauważyć. Słuchaj, zanim przedstawisz swoje argumenty."},
     "unknown": {"title": "Do odkrycia", "subtitle": "obszar do wspólnego zbadania i rozwoju",
-                "tip": "Wspólnie poszukajcie przyczyn i ustalcie działania - to naturalny materiał na IPR."},
+                "tip": "Wspólnie poszukajcie przyczyn i ustalcie działania - to naturalny materiał na IPRZ."},
 }
 
 

@@ -9,7 +9,7 @@ Kryteria oceny (nazwa | wskaźniki zachowań z załącznika nr 1):
 - {{ c.name }}{% if c.is_additional %} (dodatkowe){% endif %} | {{ c.indicators[:2] | join(" ") }}
 {% endfor %}
 {% if prev_level %}Poprzednia ocena: {{ prev_level }}{% endif %}
-{% if ipr_goals %}Cele z poprzedniego IPR: {{ ipr_goals | join("; ") }}{% endif %}
+{% if ipr_goals %}Cele z poprzedniego IPRZ: {{ ipr_goals | join("; ") }}{% endif %}
 
 Zasady:
 - piszesz do pracownika, w drugiej osobie, życzliwie i konkretnie,

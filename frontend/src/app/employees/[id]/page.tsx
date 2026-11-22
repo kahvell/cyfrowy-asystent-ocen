@@ -53,7 +53,7 @@ function StartReview({ emp }: { emp: EmployeeDetail }) {
         {emp.senior_position && (
           <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-900">
             Wyższe stanowisko w służbie cywilnej (art. 52): wg poradnika KPRM (rozdz. 3) nie podlega ocenie okresowej z art. 81, dlatego cykl nie startuje
-            automatycznie. Możesz założyć ocenę ręcznie, zgodnie z praktyką urzędu. IPR nie jest wtedy sporządzany (art. 108).
+            automatycznie. Możesz założyć ocenę ręcznie, zgodnie z praktyką urzędu. IPRZ nie jest wtedy sporządzany (art. 108).
           </p>
         )}
         <ErrorBox error={create.error} />

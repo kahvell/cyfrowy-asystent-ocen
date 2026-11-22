@@ -335,7 +335,7 @@ CONV_GOALS = {
 }
 
 _AGENDA = {
-    "opening": ["Cel rozmowy i przebieg procesu oceny (terminy, rozmowa oceniająca, IPR)",
+    "opening": ["Cel rozmowy i przebieg procesu oceny (terminy, rozmowa oceniająca, IPRZ)",
                 "Główne obowiązki z opisu stanowiska - czy opis jest aktualny?",
                 "Kryteria oceny: {criteria}",
                 "Oczekiwania: jak w praktyce wygląda spełnianie kryteriów na poziomie oczekiwań",
@@ -349,7 +349,7 @@ _AGENDA = {
                    "Mocne strony: {strong}",
                    "Obszary do rozwoju: {weak}",
                    "Rozbieżności z samooceną (jeśli są)",
-                   "Kierunki rozwoju i wnioski do IPR",
+                   "Kierunki rozwoju i wnioski do IPRZ",
                    "Podsumowanie i dalsze kroki (ocena na piśmie, 7 dni na sprzeciw)"],
 }
 _AGENDA["difficult"] = _AGENDA["assessment"]
@@ -377,7 +377,7 @@ _WATCH_OUT = [
     "Oddziel docenienie od obszarów do rozwoju; „kanapka” (pochwała - krytyka - pochwała) rozmywa przekaz.",
     "Nie porównuj z innymi pracownikami - oceniasz względem oczekiwań dla stanowiska i ustaleń z rozmowy "
     "rozpoczynającej.",
-    "Przy każdym obszarze do rozwoju ustal jedno konkretne działanie i wsparcie - to wejdzie do wniosków do IPR.",
+    "Przy każdym obszarze do rozwoju ustal jedno konkretne działanie i wsparcie - to wejdzie do wniosków do IPRZ.",
 ]
 
 
@@ -441,7 +441,7 @@ def conversation_prep(kind: str, ctx: dict, people: list[str]) -> PipelineResult
             difficult.insert(0, DifficultCase(
                 situation="Ocena negatywna",
                 how="Przedstaw fakty z całego okresu, wyjaśnij konsekwencje (ponowna ocena po 6 miesiącach, "
-                    "art. 81 ust. 9) i zaproponuj konkretny plan wsparcia w IPR."))
+                    "art. 81 ust. 9) i zaproponuj konkretny plan wsparcia w IPRZ."))
         signals = ctx.get("signals") or []
         wellbeing = [f"{s['title']}: {s['message']}" for s in signals[:3]]
         if wellbeing:
@@ -474,7 +474,7 @@ def conversation_prep(kind: str, ctx: dict, people: list[str]) -> PipelineResult
             elif not ctx.get("self_rows"):
                 summary.append("Pracownik nie przekazał samooceny - zacznij rozmowę od jego perspektywy.")
             if ctx.get("negative"):
-                summary.append("Ocena negatywna: przygotuj fakty z całego okresu i plan wsparcia w IPR.")
+                summary.append("Ocena negatywna: przygotuj fakty z całego okresu i plan wsparcia w IPRZ.")
         return ConversationPrepResult(summary=summary, goal=CONV_GOALS[kind], agenda=agenda, questions=questions,
                                       communication_tips=_TIPS, difficult=difficult, wellbeing=wellbeing,
                                       feedback=_feedback_items(ctx["criteria_detail"]) if assessment else [],
@@ -508,7 +508,7 @@ def suggest_criteria(ctx: dict, people: list[str]) -> PipelineResult:
 
     ctx: employee_name, position, duties, sheet_type, mandatory[] (nazwy),
     candidates[] {code, name, indicators[], signals[] {kind, weight, text}} - sygnały policzone w kodzie
-    (opis stanowiska, poprzednia ocena, poprzedni IPR, wybory dla tego samego stanowiska)."""
+    (opis stanowiska, poprzednia ocena, poprzedni IPRZ, wybory dla tego samego stanowiska)."""
     prompt, version = render_prompt("suggest_criteria", **ctx)
     by_code = {c["code"]: c for c in ctx["candidates"]}
 
@@ -537,7 +537,7 @@ def suggest_criteria(ctx: dict, people: list[str]) -> PipelineResult:
         ]
         if any(by_code[p.criterion_code]["signals"] and {s["kind"] for s in by_code[p.criterion_code]["signals"]}
                & {"prev_low", "ipr"} for p in proposals):
-            points.append("Nawiąż do wniosków z poprzedniej oceny i IPR: co już się udało, co jest jeszcze do zrobienia.")
+            points.append("Nawiąż do wniosków z poprzedniej oceny i IPRZ: co już się udało, co jest jeszcze do zrobienia.")
         return CriteriaSuggestion(proposals=proposals, talking_points=points)
 
     data, model = run_structured(prompt, CriteriaSuggestion, heuristic, people)
@@ -596,7 +596,7 @@ def employee_opening_prep(ctx: dict, people: list[str]) -> PipelineResult:
             "Połącz cele z kryteriami - łatwiej będzie pokazać ich realizację w ocenie.",
         ]
         if ctx.get("ipr_goals"):
-            my_goals.insert(0, "Wróć do celów z poprzedniego IPR (" + "; ".join(ctx["ipr_goals"][:3])
+            my_goals.insert(0, "Wróć do celów z poprzedniego IPRZ (" + "; ".join(ctx["ipr_goals"][:3])
                             + "). Co udało się zrealizować, a co warto kontynuować?")
         return EmployeeOpeningPrep(
             goal=("Wspólnie z przełożonym ustalić, czego oczekujecie w okresie oceny: obowiązki, kryteria, sposób ich "
@@ -642,7 +642,7 @@ def employee_opening_prep(ctx: dict, people: list[str]) -> PipelineResult:
     return PipelineResult(data, model, version)
 
 
-# ---------------------------------------------------------------- smart_check (IPR)
+# ---------------------------------------------------------------- smart_check (IPRZ)
 
 _MEASURABLE = re.compile(r"(\d|%|co najmniej|minimum|liczb|ukończ|certyfikat|wdroż|raport|ankiet|obserwacj|termin|"
                          r"bez (błędów|uwag)|ocen)", re.I)

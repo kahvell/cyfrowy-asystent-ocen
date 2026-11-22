@@ -19,7 +19,7 @@ const DEMO = [
     icon: Users,
     label: "Przełożony",
     who: "Marek Zieliński · Wydział Cyfryzacji",
-    hint: "zespół na różnych etapach oceny, przypomnienia, asystent AI, HR partner, IPR",
+    hint: "zespół na różnych etapach oceny, przypomnienia, asystent AI, HR partner, IPRZ",
   },
   {
     email: "anna.kowalska@demo.gov.pl",
@@ -33,7 +33,7 @@ const DEMO = [
     icon: BarChart3,
     label: "HR / Dyrektor generalny",
     who: "Iwona Malinowska",
-    hint: "Kadry: pracownicy, zastępstwa, import, zestawienia; sprzeciwy, zatwierdzanie IPR, dashboard",
+    hint: "Kadry: pracownicy, zastępstwa, import, zestawienia; sprzeciwy, zatwierdzanie IPRZ, dashboard",
   },
   {
     email: "admin@demo.gov.pl",

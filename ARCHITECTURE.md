@@ -102,7 +102,7 @@ cyfrowy-asystent-ocen/
 │   │   └── analytics/         # czyste SQL / pandas — bez LLM
 │   ├── seed/
 │   │   ├── criteria.json      # kryteria i skala z rozporządzenia
-│   │   ├── trainings.json     # katalog szkoleń (do IPR)
+│   │   ├── trainings.json     # katalog szkoleń (do IPRZ)
 │   │   ├── legal/             # teksty przepisów do RAG (.md/.txt)
 │   │   └── demo_data.py       # fikcyjny urząd, pracownicy, notatki
 │   └── tests/
@@ -134,8 +134,8 @@ cyfrowy-asystent-ocen/
 
 | Rola | Może |
 |------|------|
-| `employee` | zobaczyć swoje oceny i IPR, wypełnić samoocenę, dodać własne osiągnięcia do dziennika, zobaczyć notatki przełożonego udostępnione mu wprost |
-| `manager` | prowadzić dziennik obserwacji podwładnych (notatki domyślnie niejawne), udostępniać notatki podwładnemu, tworzyć i edytować ocenę, korzystać z asystenta AI, zatwierdzać IPR |
+| `employee` | zobaczyć swoje oceny i IPRZ, wypełnić samoocenę, dodać własne osiągnięcia do dziennika, zobaczyć notatki przełożonego udostępnione mu wprost |
+| `manager` | prowadzić dziennik obserwacji podwładnych (notatki domyślnie niejawne), udostępniać notatki podwładnemu, tworzyć i edytować ocenę, korzystać z asystenta AI, zatwierdzać IPRZ |
 | `hr` | dashboard całego urzędu (zagregowany, bez treści notatek), zarządzanie kryteriami i katalogiem szkoleń |
 | `admin` | użytkownicy, struktura organizacyjna |
 
@@ -163,8 +163,8 @@ erDiagram
     NOTE }o--o{ CRITERION : "tagged (AI or manual)"
 
     REVIEW ||--o| SELF_ASSESSMENT : has
-    REVIEW ||--o| IPR : produces
-    IPR ||--o{ IPR_GOAL : contains
+    REVIEW ||--o| IPRZ : produces
+    IPRZ ||--o{ IPR_GOAL : contains
     IPR_GOAL }o--o| TRAINING : suggests
 
     REVIEW ||--o{ AI_SUGGESTION : receives
@@ -341,7 +341,7 @@ stateDiagram-v2
     draft --> submitted: kontrola jakości bez krytycznych braków
     submitted --> draft: korekta
     submitted --> discussed: rozmowa oceniająca (§ 10)
-    discussed --> final: ocena na piśmie + wnioski do IPR + podpis oceniającego (§ 11); start kolejnego cyklu
+    discussed --> final: ocena na piśmie + wnioski do IPRZ + podpis oceniającego (§ 11); start kolejnego cyklu
     final --> acknowledged: zapoznanie ocenianego albo fikcja zapoznania
     acknowledged --> objection: sprzeciw w 7 dni (art. 83 ust. 1)
     objection --> acknowledged: sprzeciw nieuwzględniony
@@ -363,7 +363,7 @@ Terminy liczy `services/deadlines.py` (miesiące z końcem miesiąca, dni od zda
 | **Arkusz oceny** | manager | kryteria po lewej, po prawej panel AI: szkic, dowody (klikalne notatki), ostrzeżenia jakości |
 | **Samoocena** | employee | to samo, w uproszczeniu |
 | **Przygotowanie do rozmowy** | manager | rozbieżności samoocena vs ocena + pytania |
-| **IPR** | manager + employee | cele, działania, szkolenia, terminy |
+| **IPRZ** | manager + employee | cele, działania, szkolenia, terminy |
 | **Dashboard** | hr | rozkład ocen, kalibracja oceniających, luki kompetencyjne, adopcja AI |
 | **Asystent przepisów** | wszyscy | czat z cytatami z rozporządzenia |
 
@@ -429,7 +429,7 @@ Konta demo (w README): każdy pracownik ma konto `imie.nazwisko@demo.gov.pl` (np
 | 7 | RAG + asystent przepisów | fajnie mieć |
 | 8 | profil `local-llm` przetestowany na Bieliku/PLLuM | **na demo pokazać choć raz** |
 
-Scenariusz demo (3 min): przełożony otwiera ocenę → AI składa uzasadnienie z rocznych notatek z klikalnymi dowodami → kontrola jakości wyłapuje efekt świeżości i ogólnik → generuje się IPR → dashboard HR pokazuje „łagodnego” oceniającego → przełączenie na lokalny model i informacja, że żadne dane nie opuściły serwera.
+Scenariusz demo (3 min): przełożony otwiera ocenę → AI składa uzasadnienie z rocznych notatek z klikalnymi dowodami → kontrola jakości wyłapuje efekt świeżości i ogólnik → generuje się IPRZ → dashboard HR pokazuje „łagodnego” oceniającego → przełączenie na lokalny model i informacja, że żadne dane nie opuściły serwera.
 
 ---
 

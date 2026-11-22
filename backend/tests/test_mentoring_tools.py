@@ -1,4 +1,4 @@
-"""Narzędzia mentoringowe: okno Johari (etap IV), 70-20-10 w IPR, SMART w celach IPR."""
+"""Narzędzia mentoringowe: okno Johari (etap IV), 70-20-10 w IPRZ, SMART w celach IPRZ."""
 
 from sqlmodel import Session, select
 

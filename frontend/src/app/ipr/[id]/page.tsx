@@ -247,7 +247,7 @@ function IPRForm({ ipr }: { ipr: IPR }) {
                 Zapisz projekt
               </Button>
               <Button onClick={() => save.mutate(true)} loading={save.isPending}>
-                <CheckCircle2 className="h-4 w-4" aria-hidden /> Ustal IPR i wpisz wnioski do arkusza
+                <CheckCircle2 className="h-4 w-4" aria-hidden /> Ustal IPRZ i wpisz wnioski do arkusza
               </Button>
             </div>
           </>

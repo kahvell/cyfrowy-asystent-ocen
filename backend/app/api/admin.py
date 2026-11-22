@@ -100,7 +100,7 @@ class EmployeeIn(BaseModel):
     civil_grade: int | None = Field(default=None, ge=1, le=9)
     civil_grade_date: date | None = None
     position_description: str = ""
-    senior_position: bool = False  # wyższe stanowisko w służbie cywilnej (art. 52) - bez IPR
+    senior_position: bool = False  # wyższe stanowisko w służbie cywilnej (art. 52) - bez IPRZ
     # konto w systemie powstaje razem z pracownikiem; format adresu bywa różny w różnych urzędach,
     # dlatego kadry wpisują go ręcznie (domyślnie imie.nazwisko@demo.gov.pl)
     email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")

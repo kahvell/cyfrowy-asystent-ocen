@@ -93,7 +93,7 @@ export function CriteriaSuggestPanel({ review }: { review: Review }) {
       />
       <div className="space-y-3 p-4 text-sm">
         <p className="text-slate-600">
-          Asystent przeanalizuje opis stanowiska, poprzednią ocenę i IPR oraz kryteria wybierane dla tego stanowiska w urzędzie i zaproponuje
+          Asystent przeanalizuje opis stanowiska, poprzednią ocenę i IPRZ oraz kryteria wybierane dla tego stanowiska w urzędzie i zaproponuje
           kryteria dodatkowe z uzasadnieniem.
         </p>
         <Button variant="ai" className="w-full" onClick={() => gen.mutate()} loading={gen.isPending}>

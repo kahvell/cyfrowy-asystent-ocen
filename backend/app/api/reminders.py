@@ -58,7 +58,7 @@ def reminders_for(session: Session, user: User, today: date | None = None, scope
                 stage = {"observation": "okres oceny - rozpocznij przygotowanie oceny",
                          "draft": "przygotowanie oceny - uzupełnij oceny cząstkowe i uzasadnienia",
                          "submitted": "gotowa do rozmowy - przeprowadź rozmowę oceniającą (§ 10)",
-                         "discussed": "po rozmowie - sporządź ocenę na piśmie i wnioski do IPR (§ 11)"}[r.status]
+                         "discussed": "po rozmowie - sporządź ocenę na piśmie i wnioski do IPRZ (§ 11)"}[r.status]
                 out.append(_item("review_due", f"Zbliża się termin oceny: {e.full_name}",
                                  f"Etap: {stage}. Ocena co 24 miesiące (art. 81 ust. 4 ustawy).", r.due_date, link, today))
             elif r.status == "final":
@@ -71,7 +71,7 @@ def reminders_for(session: Session, user: User, today: date | None = None, scope
                 out.append(_item("repeat_review", f"Ponowna ocena po ocenie negatywnej: {e.full_name}",
                                  "Oceniany podlega ponownej ocenie po 6 miesiącach (art. 81 ust. 9).",
                                  dl.repeat_review_date(r.acknowledged_at), link, today))
-        # cele IPR z bliskim lub minionym terminem - przełożony monitoruje rozwój (Standardy ZZL VI pkt 3 ust. 5)
+        # cele IPRZ z bliskim lub minionym terminem - przełożony monitoruje rozwój (Standardy ZZL VI pkt 3 ust. 5)
         if team_ids:
             goals = session.exec(select(IPRGoal, IPR, Employee).join(IPR, IPR.id == IPRGoal.ipr_id)
                                  .join(Employee, Employee.id == IPR.employee_id)
@@ -79,7 +79,7 @@ def reminders_for(session: Session, user: User, today: date | None = None, scope
                                         IPRGoal.deadline.is_not(None))).all()
             for g, ipr, e in goals:
                 if (g.deadline - today).days <= 30:
-                    out.append(_item("ipr_goal", f"Cel IPR do sprawdzenia: {e.full_name}",
+                    out.append(_item("ipr_goal", f"Cel IPRZ do sprawdzenia: {e.full_name}",
                                      f"„{g.goal[:90]}” - porozmawiaj o postępach (monitorowanie rozwoju, Standardy ZZL).",
                                      g.deadline, f"/ipr/{ipr.id}", today))
         # pracownicy bez arkusza w otwartym cyklu
@@ -139,7 +139,7 @@ def reminders_for(session: Session, user: User, today: date | None = None, scope
     if with_team and user.role == "hr":
         for ipr, e in session.exec(select(IPR, Employee).join(Employee, Employee.id == IPR.employee_id)
                                    .where(IPR.status == "accepted")).all():
-            out.append(_item("ipr_approval", f"IPR do zatwierdzenia: {e.full_name}",
+            out.append(_item("ipr_approval", f"IPRZ do zatwierdzenia: {e.full_name}",
                              "Zaakceptowany przez kierującego komórką - zatwierdza dyrektor generalny (art. 108 ust. 2).",
                              None, f"/ipr/{ipr.id}", today, "warning"))
 

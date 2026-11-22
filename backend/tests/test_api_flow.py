@@ -133,7 +133,7 @@ def test_full_cycle_with_self_assessment_and_ipr(client, manager, employee, hr):
     assert client.post(f"/reviews/{review_id}/assessment/confirm", headers=employee).status_code == 200
     assert client.post(f"/reviews/{review_id}/discussed", headers=manager,
                        json={"conversation_date": "2026-11-18"}).status_code == 200
-    # bez IPR nie można zatwierdzić (§ 11 ust. 1 pkt 5)
+    # bez IPRZ nie można zatwierdzić (§ 11 ust. 1 pkt 5)
     assert client.post(f"/reviews/{review_id}/finalize", headers=manager).status_code == 409
 
     ipr = client.post(f"/reviews/{review_id}/ipr/generate", headers=manager).json()

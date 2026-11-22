@@ -911,7 +911,7 @@ const FIELD_LABEL: Record<string, string> = {
   period_start: "okres od",
   period_end: "okres do",
   justification: "uzasadnienie oceny",
-  ipr_conclusions: "wnioski do IPR",
+  ipr_conclusions: "wnioski do IPRZ",
   criteria: "oceny cząstkowe",
   additional_criterion_ids: "kryteria dodatkowe",
 };
