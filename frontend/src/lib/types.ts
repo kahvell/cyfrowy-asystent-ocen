@@ -164,6 +164,8 @@ export interface Review {
     obligatory_promotion: boolean;
     promotion_deadline: string | null;
     termination_risk?: boolean;
+    // zmiana stanowiska z istotną zmianą zakresu obowiązków (art. 81 ust. 6, § 9 rozporządzenia)
+    position_change?: { kind: "early_review" | "criteria_reopened"; changed: string; earliest?: string; latest: string } | null;
   };
 }
 

@@ -1,13 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, GraduationCap, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, GraduationCap, PenLine, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMe } from "@/components/app-shell";
+import { LearningMix, MixTags } from "@/components/learning-mix";
+import { SmartResult, type SmartCheck } from "@/components/smart";
 import { useCriteria } from "@/components/notes";
-import { AiLabel, Badge, Button, Card, ErrorBox, Input, Label, PageTitle, Spinner, Textarea } from "@/components/ui";
+import { AiLabel, AiWaiting, Badge, Button, Card, ErrorBox, Input, Label, PageTitle, Spinner, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { IPR, IPRGoal, Training } from "@/lib/types";
 import { fmtDate, modelLabel } from "@/lib/utils";
@@ -36,6 +38,15 @@ function IPRForm({ ipr }: { ipr: IPR }) {
   const { data: criteria } = useCriteria();
   const [summary, setSummary] = useState(ipr.summary);
   const [goals, setGoals] = useState<IPRGoal[]>(ipr.goals);
+  const smart = useMutation({
+    mutationFn: () =>
+      api<{ model: string; goals: SmartCheck[] }>(`/ipr/${iprId}/ai/smart-check`, {
+        method: "POST",
+        json: {
+          goals: goals.map((g) => ({ goal: g.goal, actions: g.actions, success_measure: g.success_measure, deadline: g.deadline, criterion_id: g.criterion_id })),
+        },
+      }),
+  });
 
   const save = useMutation({
     mutationFn: (approve: boolean) =>
@@ -120,12 +131,37 @@ function IPRForm({ ipr }: { ipr: IPR }) {
           )}
           <ErrorBox error={step.error} />
         </Card>
+        <Card className="space-y-4 p-5">
+          <LearningMix actions={goals.map((g) => g.actions)} />
+          {ipr.can_edit && (
+            <div className="border-t border-border pt-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="ai" size="sm" onClick={() => smart.mutate()} loading={smart.isPending} disabled={!goals.length}>
+                  <PenLine className="h-4 w-4" aria-hidden /> Sprawdź cele SMART
+                </Button>
+                <span className="text-xs text-muted">Konkretny, Mierzalny, Osiągalny, Istotny, określony w Czasie - wynik przy każdym celu.</span>
+              </div>
+              <AiWaiting active={smart.isPending} typical="20–60 s" />
+              <ErrorBox error={smart.error} />
+            </div>
+          )}
+        </Card>
         <Card className="p-5">
           <Label htmlFor="summary">Kierunki rozwoju zawodowego</Label>
           <Textarea id="summary" rows={3} readOnly={!editable} value={summary} onChange={(e) => setSummary(e.target.value)} />
         </Card>
         {goals.map((g, i) => (
           <Card key={i} className="space-y-3 p-5">
+            {smart.data?.goals[i] && (
+              <SmartResult
+                check={smart.data.goals[i]}
+                model={modelLabel(smart.data.model)}
+                goal={g.goal}
+                measure={g.success_measure}
+                editable={editable}
+                onApply={(patch) => upd(i, patch)}
+              />
+            )}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">{i + 1}</span>
@@ -159,7 +195,10 @@ function IPRForm({ ipr }: { ipr: IPR }) {
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <Label>Działania</Label>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <Label>Działania</Label>
+                  <MixTags actions={g.actions} />
+                </div>
                 <Textarea rows={3} readOnly={!editable} value={g.actions} onChange={(e) => upd(i, { actions: e.target.value })} />
               </div>
               <div>

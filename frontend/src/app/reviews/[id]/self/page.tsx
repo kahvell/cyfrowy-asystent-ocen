@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { StarField, StarIntro } from "@/components/star";
 import { Button, Card, ErrorBox, PageTitle, Spinner, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { SelfAssessment } from "@/lib/types";
@@ -54,6 +55,7 @@ function SelfForm({ data, reviewId }: { data: SelfAssessment; reviewId: number }
         }
       />
       <div className="space-y-4">
+        {!locked && <StarIntro />}
         {data.criteria.map((c) => {
           const it = items[c.criterion_id] ?? { score: null, comment: "" };
           return (
@@ -77,14 +79,11 @@ function SelfForm({ data, reviewId }: { data: SelfAssessment; reviewId: number }
                   </button>
                 ))}
               </div>
-              <Textarea
-                className="mt-3"
-                rows={2}
+              <StarField
                 readOnly={locked}
                 value={it.comment}
-                onChange={(e) => set(c.criterion_id, { comment: e.target.value })}
-                placeholder="Przykład z okresu oceny…"
-                aria-label={`Komentarz: ${c.name}`}
+                onChange={(v) => set(c.criterion_id, { comment: v })}
+                label={`Przykład: ${c.name}`}
               />
             </Card>
           );

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, delete, select
 
-from app.ai.pipelines import generate_ipr
+from app.ai.pipelines import generate_ipr, smart_check
 from app.ai.rag import retrieve
 from app.db import get_session
 from app.models import IPR, AISuggestion, Criterion, Employee, IPRGoal, Review, Training, User, utcnow
@@ -280,3 +280,35 @@ def approve_ipr(ipr_id: int, user: User = Depends(get_current_user), session: Se
     session.commit()
     session.refresh(ipr)
     return _with_rights(session, user, ipr)
+
+
+class SmartGoalIn(BaseModel):
+    goal: str = ""
+    actions: str = ""
+    success_measure: str = ""
+    deadline: date | None = None
+    criterion_id: int | None = None
+
+
+class SmartIn(BaseModel):
+    goals: list[SmartGoalIn]
+
+
+@router.post("/ipr/{ipr_id}/ai/smart-check")
+def ai_smart_check(ipr_id: int, body: SmartIn, user: User = Depends(get_current_user),
+                   session: Session = Depends(get_session)):
+    """Sprawdzenie celów IPR wg SMART (reguły w kodzie) z propozycją lepszych sformułowań (model).
+    Bierze cele z formularza - także te jeszcze niezapisane. Decyzja o zmianie należy do przełożonego."""
+    ipr = _get_ipr(session, user, ipr_id, manage=True)
+    emp = session.get(Employee, ipr.employee_id)
+    names = {c.id: c.name for c in session.exec(select(Criterion)).all()}
+    goals = [{"goal": g.goal, "actions": g.actions, "success_measure": g.success_measure,
+              "deadline": g.deadline.isoformat() if g.deadline else None,
+              "criterion": names.get(g.criterion_id) if g.criterion_id else None} for g in body.goals]
+    res = smart_check(goals, [emp.full_name] if emp else [])
+    s = AISuggestion(review_id=ipr.review_id, kind="smart_check", payload=res.data.model_dump(), model=res.model,
+                     prompt_version=res.prompt_version, status="info", created_by=user.id)
+    session.add(s)
+    audit(session, user, "ai_generate", "smart_check", ipr.id)
+    session.commit()
+    return {"model": res.model, **res.data.model_dump()}

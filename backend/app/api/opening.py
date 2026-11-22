@@ -8,6 +8,7 @@
 """
 
 from collections import Counter
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -26,6 +27,7 @@ from app.models import (
     Review,
     ReviewCriterion,
     ReviewCycle,
+    SelfAssessment,
     User,
     utcnow,
 )
@@ -178,9 +180,13 @@ def ai_employee_opening_prep(review_id: int, user: User = Depends(get_current_us
 WHEEL_STATUSES = {"criteria", "observation"}
 
 
+# ta sama skala co oceny cząstkowe przełożonego (§ 11 ust. 1 pkt 1), żeby pracownikowi nie mieszały się skale
+WheelScore = Literal[1, 3, 5, 7, 9]
+
+
 class WheelItem(BaseModel):
-    now: int = Field(ge=1, le=10)
-    target: int = Field(ge=1, le=10)
+    now: WheelScore
+    target: WheelScore
 
 
 class WheelIn(BaseModel):
@@ -253,3 +259,60 @@ def put_wheel(review_id: int, body: WheelIn, user: User = Depends(get_current_us
     session.commit()
     session.refresh(wheel)
     return _wheel_out(session, review, wheel, editable=True)
+
+
+# ---------------------------------------------------------------- okno Johari (etap IV - oceniający)
+
+JOHARI = {
+    "arena": {"title": "Arena", "subtitle": "mocne strony widoczne dla obu stron",
+              "tip": "Zacznij od docenienia - to wspólny punkt wyjścia rozmowy."},
+    "blind": {"title": "Ślepa plamka", "subtitle": "widzisz więcej niż pracownik",
+              "tip": "Pokaż konkretne sytuacje z dziennika - pracownik może nie doceniać swoich mocnych stron."},
+    "facade": {"title": "Fasada", "subtitle": "pracownik widzi więcej niż Ty",
+               "tip": "Zapytaj o przykłady - mogłeś czegoś nie zauważyć. Słuchaj, zanim przedstawisz swoje argumenty."},
+    "unknown": {"title": "Do odkrycia", "subtitle": "obszar do wspólnego zbadania i rozwoju",
+                "tip": "Wspólnie poszukajcie przyczyn i ustalcie działania - to naturalny materiał na IPR."},
+}
+
+
+def johari_quadrant(manager: int | None, self_score: int | None) -> str:
+    """Ćwiartka okna Johari dla kryterium: oceny 1/3/5/7/9 przełożonego i samoocena pracownika."""
+    if manager is None or self_score is None:
+        return "unknown"
+    if manager >= 7 and self_score >= 7:
+        return "arena"
+    if manager - self_score >= 2:
+        return "blind"
+    if self_score - manager >= 2:
+        return "facade"
+    return "unknown"
+
+
+@router.get("/reviews/{review_id}/johari")
+def johari_window(review_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """Okno Johari przed rozmową oceniającą: oceny przełożonego, samoocena i koło rozwoju pracownika.
+    Liczone w kodzie (jawne reguły), bez modelu językowego."""
+    review = get_review_for(session, user, review_id, manage=True)
+    if review.status not in ("submitted", "discussed"):
+        raise HTTPException(409, "Okno Johari jest dostępne przed rozmową oceniającą (etap IV)")
+    sa = session.exec(select(SelfAssessment).where(SelfAssessment.review_id == review.id)).first()
+    if sa is None or sa.submitted_at is None:
+        raise HTTPException(409, "Pracownik nie przekazał samooceny")
+    wheel = session.exec(select(DevelopmentWheel).where(DevelopmentWheel.review_id == review.id)).first()
+    wheel = wheel if wheel and wheel.shared_at else None
+    quadrants: dict[str, list[dict]] = {k: [] for k in JOHARI}
+    for rc, c in review_entries(session, review):
+        self_score = (sa.items.get(str(c.id)) or {}).get("score")
+        w = (wheel.items.get(str(c.id)) if wheel else None) or {}
+        q = johari_quadrant(rc.score, self_score)
+        quadrants[q].append({
+            "criterion_id": c.id, "name": c.name, "manager_score": rc.score, "self_score": self_score,
+            "gap": (self_score - rc.score) if self_score is not None and rc.score is not None else None,
+            "wheel_now": w.get("now"), "wheel_target": w.get("target"),
+            "focus": bool(wheel and c.id in wheel.focus),
+        })
+    # kolejność rozmowy: od największych rozbieżności
+    order = sorted((i for k in ("blind", "facade") for i in quadrants[k]), key=lambda i: -abs(i["gap"] or 0))
+    return {"quadrants": [{"key": k, **JOHARI[k], "items": quadrants[k]} for k in JOHARI],
+            "start_with": [i["name"] for i in order[:2]],
+            "wheel_shared": wheel is not None}

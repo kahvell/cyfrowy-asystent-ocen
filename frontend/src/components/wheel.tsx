@@ -1,7 +1,7 @@
 "use client";
 
-// Koło rozwoju (etap I, § 5): oceniany zaznacza, gdzie jest i gdzie chce być w każdym kryterium (skala 1-10 - celowo
-// inna niż skala ocen 1/3/5/7/9, to nie jest samoocena), wskazuje maks. 2 obszary do pracy i może zaproponować
+// Koło rozwoju (etap I, § 5): oceniany zaznacza, gdzie jest i gdzie chce być w każdym kryterium (ta sama skala
+// 1/3/5/7/9 co oceny przełożonego, żeby skale się nie mieszały), wskazuje maks. 2 obszary do pracy i może zaproponować
 // kryterium dodatkowe. Przełożony widzi koło po udostępnieniu - jako punkt wyjścia do rozmowy rozpoczynającej.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,7 +10,7 @@ import { useState } from "react";
 import { Legend, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Badge, Button, Card, CardHeader, ErrorBox, Label, Spinner, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
-import { cn, fmtDate } from "@/lib/utils";
+import { cn, fmtDate, SCALE } from "@/lib/utils";
 
 type WheelItem = { now: number; target: number };
 type Wheel = {
@@ -40,7 +40,7 @@ function WheelChart({ wheel, items }: { wheel: Wheel; items: Record<string, Whee
         <RadarChart data={data} outerRadius="70%">
           <PolarGrid stroke="var(--border)" />
           <PolarAngleAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted)" }} />
-          <PolarRadiusAxis domain={[0, 10]} tickCount={6} tick={{ fontSize: 9, fill: "var(--muted)" }} axisLine={false} />
+          <PolarRadiusAxis domain={[0, 9]} ticks={[1, 3, 5, 7, 9]} tick={{ fontSize: 9, fill: "var(--muted)" }} axisLine={false} />
           <Radar name="Cel" dataKey="Cel" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.12} strokeDasharray="4 3" />
           <Radar name="Teraz" dataKey="Teraz" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.3} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -51,21 +51,31 @@ function WheelChart({ wheel, items }: { wheel: Wheel; items: Record<string, Whee
   );
 }
 
+// ta sama skala co oceny cząstkowe przełożonego i samoocena: 1 / 3 / 5 / 7 / 9
 function Scale({ value, onChange, disabled, label }: { value: number; onChange: (v: number) => void; disabled?: boolean; label: string }) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-12 shrink-0 text-xs text-muted">{label}</span>
-      <input
-        type="range"
-        min={1}
-        max={10}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-[var(--primary)]"
-        aria-label={label}
-      />
-      <span className="w-5 text-right text-xs font-semibold tabular-nums">{value}</span>
+      <div className="grid w-full grid-cols-5 gap-1" role="radiogroup" aria-label={label}>
+        {SCALE.map((s) => (
+          <button
+            key={s.value}
+            type="button"
+            role="radio"
+            aria-checked={value === s.value}
+            disabled={disabled}
+            title={s.label}
+            onClick={() => onChange(s.value)}
+            className={cn(
+              "rounded-md border px-1 py-1 text-xs leading-tight disabled:cursor-not-allowed",
+              value === s.value ? "border-primary bg-primary text-white" : "border-border bg-white hover:bg-slate-50",
+            )}
+          >
+            <span className="block font-semibold">{s.value}</span>
+            <span className="hidden text-[10px] xl:block">{s.short}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -114,7 +124,7 @@ function WheelForm({ wheel }: { wheel: Wheel }) {
           </p>
         )}
         <p className="text-slate-600">
-          Skala 1-10 to Twoja własna perspektywa, nie ocena. Zaznacz maksymalnie {MAX_FOCUS} kryteria, nad którymi chcesz pracować w najbliższym okresie -
+          Skala jak w ocenie okresowej: 1 - znacznie poniżej, 5 - na poziomie, 9 - znacznie powyżej oczekiwań. To Twoja perspektywa przed rozmową, a nie samoocena. Zaznacz maksymalnie {MAX_FOCUS} kryteria, nad którymi chcesz pracować w najbliższym okresie -
           porozmawiacie o nich w rozmowie rozpoczynającej.
         </p>
         <WheelChart wheel={wheel} items={items} />

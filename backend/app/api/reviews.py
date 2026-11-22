@@ -42,6 +42,7 @@ from app.services.process import (
     is_repeat_review,
     obligatory_promotion,
     office_of,
+    position_change_info,
     prefill_previous,
     promotion_target,
     second_negative_risk,
@@ -558,8 +559,14 @@ def reopen(review_id: int, user: User = Depends(get_current_user), session: Sess
     return _transition(session, review, user, {"submitted"}, "draft")
 
 
-def finalize_problems(session: Session, review: Review) -> list[dict]:
+def finalize_problems(session: Session, review: Review, today: date | None = None) -> list[dict]:
     warnings = [w for w in rule_warnings(session, review) if w["severity"] == "critical"]
+    pc = position_change_info(review)
+    if pc and pc.get("kind") == "early_review" and (today or date.today()) < date.fromisoformat(pc["earliest"]):
+        warnings.append(_err("position_change_too_early", "Za wcześnie na ocenę w związku ze zmianą stanowiska",
+                             f"Ocenę sporządza się nie wcześniej niż 7 dni przed zmianą stanowiska "
+                             f"({date.fromisoformat(pc['changed']).strftime('%d.%m.%Y')}) - § 9 ust. 2 rozporządzenia.",
+                             f"Sporządź ocenę od {date.fromisoformat(pc['earliest']).strftime('%d.%m.%Y')}."))
     if not review.ipr_conclusions.strip():
         warnings.append(_err("missing_ipr", "Brak wniosków do IPR",
                              "Arkusz musi zawierać wnioski dotyczące IPR (art. 81 ust. 5, § 11 ust. 1 pkt 5).",

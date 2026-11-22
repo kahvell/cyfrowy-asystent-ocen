@@ -224,11 +224,11 @@ class SelfAssessment(SQLModel, table=True):
 
 
 class DevelopmentWheel(SQLModel, table=True):
-    """Koło rozwoju ocenianego (etap I): gdzie jestem i gdzie chcę być w każdym kryterium (skala 1-10, celowo inna
-    niż skala ocen), nad czym chcę pracować. Własny materiał pracownika - przełożony widzi go po udostępnieniu."""
+    """Koło rozwoju ocenianego (etap I): gdzie jestem i gdzie chcę być w każdym kryterium (ta sama skala
+    1/3/5/7/9 co oceny cząstkowe), nad czym chcę pracować. Własny materiał pracownika - przełożony widzi go po udostępnieniu."""
     id: int | None = Field(default=None, primary_key=True)
     review_id: int = Field(foreign_key="review.id", unique=True)
-    # {"<criterion_id>": {"now": 4, "target": 7}}
+    # {"<criterion_id>": {"now": 5, "target": 7}}
     items: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     focus: list[int] = Field(default_factory=list, sa_type=JSON)  # maks. 2 kryteria do rozwoju
     proposed_criterion_id: int | None = Field(default=None, foreign_key="criterion.id")

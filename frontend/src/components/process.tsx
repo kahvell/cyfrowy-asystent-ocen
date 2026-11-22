@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertOctagon, CalendarClock, CalendarPlus, CheckCircle2, FileSignature, Gavel, Printer, Scale, ShieldCheck, Stamp, Undo2 } from "lucide-react";
+import { AlertOctagon, Briefcase, CalendarClock, CalendarPlus, CheckCircle2, FileSignature, Gavel, Printer, Scale, ShieldCheck, Stamp, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useCriteria } from "@/components/notes";
@@ -113,10 +113,37 @@ function DeadlineChip({ label, date, warnDays = 14 }: { label: string; date: str
   );
 }
 
+function PositionChangeBanner({ review }: { review: Review }) {
+  const pc = review.deadlines.position_change;
+  if (!pc || ["final", "acknowledged", "objection"].includes(review.status)) return null;
+  const early = pc.kind === "early_review";
+  return (
+    <div className="mb-3 flex items-start gap-2 rounded-md border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+      <Briefcase className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <div>
+        <strong>Zmiana stanowiska z istotną zmianą zakresu obowiązków ({fmtDate(pc.changed)}).</strong>{" "}
+        {early ? (
+          <>
+            Ocenę sporządza się w związku ze zmianą stanowiska (art. 81 ust. 6) - w oknie <strong>od {fmtDate(pc.earliest)} do {fmtDate(pc.latest)}</strong>{" "}
+            (§ 9 ust. 2 rozporządzenia). Po ocenie system założy nowy cykl z kryteriami dla nowego stanowiska.
+          </>
+        ) : (
+          <>
+            Zmiana w ciągu 6 miesięcy od ustalenia kryteriów: ponownie przeprowadź rozmowę i wyznacz kryteria do <strong>{fmtDate(pc.latest)}</strong>. Termin
+            sporządzenia oceny się nie zmienia (§ 9 ust. 1 rozporządzenia).
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function DeadlinesBar({ review }: { review: Review }) {
   const d = review.deadlines;
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
+    <>
+      <PositionChangeBanner review={review} />
+      <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
       {review.status === "criteria" && <DeadlineChip label="wyznaczenie kryteriów do" date={d.criteria_deadline} />}
       {!["final", "acknowledged", "objection"].includes(review.status) && <DeadlineChip label="termin sporządzenia oceny" date={d.due_date} warnDays={60} />}
       {d.objection_open && <DeadlineChip label="sprzeciw do" date={d.objection_deadline} />}
@@ -138,6 +165,7 @@ export function DeadlinesBar({ review }: { review: Review }) {
         </Button>
       </Link>
     </div>
+    </>
   );
 }
 

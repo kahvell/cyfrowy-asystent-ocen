@@ -103,15 +103,15 @@ def test_development_wheel_shared_with_manager_and_used_in_suggestions(client, m
     assert w["editable"] and w["criteria"] and w["proposable"]
     cids = [c["criterion_id"] for c in w["criteria"]]
     proposed = w["proposable"][0]["criterion_id"]
-    body = {"items": {str(c): {"now": 4, "target": 8} for c in cids}, "focus": cids[:2],
+    body = {"items": {str(c): {"now": 3, "target": 7} for c in cids}, "focus": cids[:2],
             "proposed_criterion_id": proposed, "note": "Chcę rozwijać się w analizie danych.", "share": False}
     assert client.put(f"/reviews/{rid}/wheel", headers=jakub, json=body).status_code == 200
     # przed udostępnieniem przełożony nie widzi treści; inny pracownik w ogóle
     assert client.get(f"/reviews/{rid}/wheel", headers=manager).json()["shared_at"] is None
     assert client.get(f"/reviews/{rid}/wheel", headers=manager).json()["items"] == {}
     assert client.get(f"/reviews/{rid}/wheel", headers=employee).status_code == 403
-    # walidacja: skala 1-10, maks. 2 obszary
-    bad = {**body, "items": {str(cids[0]): {"now": 0, "target": 11}}}
+    # walidacja: skala 1/3/5/7/9 jak oceny cząstkowe, maks. 2 obszary
+    bad = {**body, "items": {str(cids[0]): {"now": 4, "target": 8}}}
     assert client.put(f"/reviews/{rid}/wheel", headers=jakub, json=bad).status_code == 422
     assert client.put(f"/reviews/{rid}/wheel", headers=jakub, json={**body, "focus": cids[:3]}).status_code == 422
     # udostępnienie -> przełożony widzi koło, a propozycja kryteriów uwzględnia wskazanie pracownika

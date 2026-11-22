@@ -220,11 +220,6 @@ class IPRDraft(BaseModel):
     goals: list[IPRGoalDraft]
 
 
-_ACTIONS = {
-    "default": "Zadanie rozwojowe przydzielone przez przełożonego; comiesięczna krótka rozmowa o postępach.",
-}
-
-
 def generate_ipr(
     focus: list[dict], trainings: list[dict], legal: list[dict], *, employee_name: str, position: str,
     position_description: str,
@@ -243,8 +238,15 @@ def generate_ipr(
                 criterion_code=c["code"],
                 goal=(f"Wykorzystanie mocnej strony „{c['name']}” do wspierania zespołu" if strength
                       else f"Podniesienie poziomu w kryterium „{c['name']}” do co najmniej „na poziomie oczekiwań”"),
-                actions=(f"{'Udział w szkoleniu „' + training['title'] + '”; ' if training else ''}"
-                         f"{_ACTIONS['default']} Mentoring z doświadczoną osobą z zespołu."),
+                # model 70-20-10: praca (zadania), ludzie (mentoring, informacja zwrotna), szkolenie
+                actions=(("Praca: prowadzenie zespołu zadaniowego i dzielenie się doświadczeniem z nowymi osobami"
+                          if strength else
+                          f"Praca: dodatkowe zadanie rozwijające „{c['name'].lower()}” uzgodnione z przełożonym, "
+                          "z przeglądem efektów co miesiąc")
+                         + "; Ludzie: mentoring z doświadczoną osobą z zespołu i krótka informacja zwrotna po każdym "
+                           "etapie zadania"
+                         + (f"; Szkolenie: „{training['title']}”" if training
+                            else "; Szkolenie: samodoskonalenie - literatura fachowa i dobre praktyki z innych urzędów")),
                 success_measure="Co najmniej 3 obserwacje w dzienniku potwierdzające postęp; omówienie na rozmowie śródokresowej.",
                 deadline_months=6 if not strength else 12,
                 training_code=training["code"] if training else None,
@@ -637,4 +639,84 @@ def employee_opening_prep(ctx: dict, people: list[str]) -> PipelineResult:
         )
 
     data, model = run_structured(prompt, EmployeeOpeningPrep, heuristic, people)
+    return PipelineResult(data, model, version)
+
+
+# ---------------------------------------------------------------- smart_check (IPR)
+
+_MEASURABLE = re.compile(r"(\d|%|co najmniej|minimum|liczb|ukończ|certyfikat|wdroż|raport|ankiet|obserwacj|termin|"
+                         r"bez (błędów|uwag)|ocen)", re.I)
+_VAGUE_GOAL = re.compile(r"^(poprawa|rozwój|rozwijanie|doskonalenie|podniesienie)\b[^,.;]{0,25}$", re.I)
+
+
+class SmartGoalCheck(BaseModel):
+    index: int
+    specific: bool = True
+    measurable: bool = True
+    achievable: bool = True
+    relevant: bool = True
+    time_bound: bool = True
+    issues: list[str] = Field(default_factory=list)
+    improved_goal: str = ""
+    improved_measure: str = ""
+
+
+class SmartResult(BaseModel):
+    goals: list[SmartGoalCheck] = Field(default_factory=list)
+
+
+def smart_rules(g: dict) -> dict[str, bool]:
+    """Kryteria SMART sprawdzane w kodzie (jawne reguły) - model tylko proponuje lepsze sformułowanie."""
+    goal, measure, actions = (g.get("goal") or "").strip(), (g.get("success_measure") or "").strip(), \
+        (g.get("actions") or "").strip()
+    return {
+        "specific": len(goal.split()) >= 6 and not _VAGUE_GOAL.match(goal),
+        "measurable": len(measure) >= 15 and bool(_MEASURABLE.search(measure)),
+        "achievable": len(actions) >= 15,
+        "relevant": bool(g.get("criterion")),
+        "time_bound": bool(g.get("deadline")),
+    }
+
+
+_SMART_ISSUES = {
+    "specific": "Cel jest ogólny - napisz, co konkretnie pracownik będzie robił inaczej i w jakiej sprawie.",
+    "measurable": "Brak miernika - po czym poznacie, że cel osiągnięto (liczba, termin, efekt, opinia odbiorców)?",
+    "achievable": "Brak działań - jak pracownik ma osiągnąć cel (zadanie, mentoring, szkolenie)?",
+    "relevant": "Cel nie jest powiązany z kryterium oceny - wskaż, którego obszaru dotyczy.",
+    "time_bound": "Brak terminu realizacji celu.",
+}
+
+
+def smart_check(goals: list[dict], people: list[str]) -> PipelineResult:
+    """goals: [{goal, actions, success_measure, deadline, criterion}]"""
+    rules = [smart_rules(g) for g in goals]
+    prompt, version = render_prompt("smart_check", goals=goals, rules=rules)
+
+    def heuristic() -> SmartResult:
+        out = []
+        for i, (g, r) in enumerate(zip(goals, rules, strict=True)):
+            improved_goal = g["goal"]
+            if not r["specific"]:
+                improved_goal = (f"{g['goal'].rstrip('.')} - poprzez konkretne zadanie: "
+                                 f"{(g.get('actions') or 'do ustalenia z przełożonym').split(';')[0].strip()}")
+            improved_measure = g.get("success_measure") or ""
+            if not r["measurable"]:
+                improved_measure = ("Co najmniej 3 obserwacje w dzienniku potwierdzające postęp oraz omówienie efektów "
+                                    "na rozmowie śródokresowej" + (f" (do {g['deadline']})" if g.get("deadline") else ""))
+            out.append(SmartGoalCheck(index=i, improved_goal=improved_goal, improved_measure=improved_measure))
+        return SmartResult(goals=out)
+
+    data, model = run_structured(prompt, SmartResult, heuristic, people)
+    # oceny S/M/A/R/T zawsze z reguł w kodzie; model dostarcza tylko propozycje sformułowań
+    by_index = {c.index: c for c in data.goals if 0 <= c.index < len(goals)}
+    checks = []
+    for i, r in enumerate(rules):
+        c = by_index.get(i) or SmartGoalCheck(index=i)
+        for k, v in r.items():
+            setattr(c, k, v)
+        c.issues = [_SMART_ISSUES[k] for k, v in r.items() if not v]
+        if not c.improved_goal:
+            c.improved_goal = goals[i]["goal"]
+        checks.append(c)
+    data.goals = checks
     return PipelineResult(data, model, version)

@@ -183,6 +183,15 @@ def init_deadlines(session: Session, review: Review) -> None:
     review.due_date = compute_due_date(session, review)
 
 
+def position_change_info(review: Review) -> dict | None:
+    """Ostatnia zmiana stanowiska z istotną zmianą zakresu obowiązków, zapisana w historii terminu:
+    early_review - ocena w oknie § 9 ust. 2 (od 7 dni przed do 30 dni po zmianie), criteria_reopened - § 9 ust. 1."""
+    for h in reversed(review.due_date_history or []):
+        if isinstance(h, dict) and h.get("position_change"):
+            return h["position_change"]
+    return None
+
+
 def review_deadlines(session: Session, review: Review, today: date | None = None) -> dict:
     today = today or date.today()
     repeat = is_repeat_review(session, review)
@@ -196,6 +205,7 @@ def review_deadlines(session: Session, review: Review, today: date | None = None
         "repeat_review_date": None,
         "obligatory_promotion": False,
         "promotion_deadline": None,
+        "position_change": position_change_info(review),
     }
     if review.acknowledged_at:
         od = dl.objection_deadline(review.acknowledged_at)

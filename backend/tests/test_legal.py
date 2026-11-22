@@ -221,3 +221,26 @@ def test_late_review_period_end_is_due_date(client, hr, manager):
     fin = client.post(f"/reviews/{rid}/finalize", headers=manager).json()
     assert fin["period_end"] == due and fin["reviewer_signed_at"] == date.today().isoformat()
     assert fin["signature_method"] == "wydruk"
+
+
+def test_position_change_window_is_shown_and_enforced(client, hr, manager):
+    """§ 9 ust. 2: ocena w związku ze zmianą stanowiska nie wcześniej niż 7 dni przed zmianą."""
+    from app.api.reviews import finalize_problems
+
+    struct = client.get("/admin/structure", headers=hr).json()
+    zielinski = next(m for m in struct["managers"] if m["full_name"] == "Marek Zieliński")
+    e = client.post("/admin/employees", headers=hr, json={
+        "full_name": "Zmiana Stanowiska", "position": "Referent", "department_id": struct["departments"][0]["id"],
+        "manager_id": zielinski["id"], "employment_start": "2025-06-02", "email": "zmiana.stanowiska@demo.gov.pl"}).json()
+    r = client.patch(f"/admin/employees/{e['id']}", headers=hr, json={
+        "position": "Kierownik projektu IT", "significant_change_date": "2027-03-01"})
+    eff = r.json()["position_change"][0]
+    assert eff["effect"] == "review_due"
+    review = client.get(f"/reviews/{eff['review_id']}", headers=manager).json()
+    pc = review["deadlines"]["position_change"]
+    assert pc == {"kind": "early_review", "changed": "2027-03-01", "earliest": "2027-02-22", "latest": "2027-03-31"}
+    with Session(engine) as s:
+        rv = s.get(Review, eff["review_id"])
+        codes = lambda d: {w["code"] for w in finalize_problems(s, rv, today=d)}  # noqa: E731
+        assert "position_change_too_early" in codes(date(2027, 2, 21))
+        assert "position_change_too_early" not in codes(date(2027, 2, 22))

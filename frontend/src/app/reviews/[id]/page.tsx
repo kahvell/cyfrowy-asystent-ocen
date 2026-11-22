@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { ComparePanel, DraftSuggestion, SourceChip, WarningsList } from "@/components/ai-panels";
 import { CriteriaSuggestPanel, EmployeeOpeningPrep } from "@/components/opening-ai";
+import { JohariWindow } from "@/components/johari";
 import { DevelopmentWheelEditor, DevelopmentWheelView } from "@/components/wheel";
 import { ConversationPrep } from "@/components/hr-partner";
 import { AdminCorrection, CriteriaStage, DeadlinesBar, DeliveryPanel, DueDateRequests, InviteButton, ObservationStage, ProcessStepper, SheetData, stepLabel } from "@/components/process";
@@ -558,6 +559,7 @@ export default function ReviewPage() {
                 <div className="space-y-3 p-4">
                   {review.self_assessment_submitted ? (
                     <>
+                      <JohariWindow reviewId={review.id} />
                       <Button variant="ai" className="w-full" onClick={() => cmp.mutate()} loading={cmp.isPending}>
                         <PenLine className="h-4 w-4" aria-hidden /> Porównaj z samooceną i przygotuj pytania
                       </Button>

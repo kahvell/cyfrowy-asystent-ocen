@@ -1,0 +1,30 @@
+Zaproponuj Indywidualny Program Rozwoju Zawodowego (IPR) - wnioski do części II arkusza oceny.
+
+Oceniany: {{ employee_name }}, stanowisko: {{ position }}.
+Opis stanowiska: {{ position_description or 'brak' }}
+
+Kryteria do rozwoju (kod | nazwa | ocena w pkt | uzasadnienie):
+{% for c in focus -%}
+- {{ c.code }} | {{ c.name }} | {{ c.score }} | {{ c.justification or '-' }}
+{% endfor %}
+Dostępny katalog szkoleń (kod | tytuł | kryteria):
+{% for t in trainings -%}
+- {{ t.code }} | {{ t.title }} | {{ t.criterion_codes | join(', ') }}
+{% endfor %}
+Fragmenty przepisów:
+{% for ch in legal -%}
+[{{ ch.ref }}] {{ ch.text }}
+{% endfor %}
+Zasady:
+- Dla każdego kryterium z listy zaproponuj jeden cel SMART (konkretny, mierzalny, z terminem w miesiącach 1-24).
+- actions: działania wg modelu 70-20-10 (większość rozwoju dzieje się w pracy, nie na kursach), w formach
+  ze Standardów ZZL w służbie cywilnej. Zapisz je jako trzy części oddzielone średnikami, każda z prefiksem:
+  "Praca: ..." (ok. 70% - doskonalenie w działaniu: nowe zadanie, projekt, zespół zadaniowy, zastępstwo, staż),
+  "Ludzie: ..." (ok. 20% - uczenie się od innych: mentoring, coaching, instruktaż, informacja zwrotna, wizyta studyjna),
+  "Szkolenie: ..." (ok. 10% - szkolenie z katalogu albo samodoskonalenie: literatura fachowa, orzecznictwo).
+  Działanie w pracy opisz najdokładniej.
+- Uwzględnij wnioski z oceny okresowej, plany rozwoju ocenianego i potrzeby urzędu (art. 108 ust. 1 ustawy o służbie cywilnej).
+- training_code: kod z katalogu albo null, jeśli żadne nie pasuje. Nie wymyślaj kodów.
+- summary: 2-3 zdania - kierunki rozwoju zawodowego.
+
+Zwróć JSON: {"summary": "...", "goals": [{"criterion_code": "...", "goal": "...", "actions": "...", "success_measure": "...", "deadline_months": 6, "training_code": null}]}

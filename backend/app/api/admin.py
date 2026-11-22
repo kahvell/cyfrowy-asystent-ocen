@@ -260,7 +260,12 @@ def position_change(session: Session, e: Employee, changed: date) -> list[dict]:
             note = (f"zmiana stanowiska - ocena w związku z istotną zmianą zakresu obowiązków (art. 81 ust. 6): "
                     f"od {(changed - timedelta(days=7)).isoformat()} do {new.isoformat()} (§ 9 ust. 2)")
             r.due_date_history = [*r.due_date_history, {"from": r.due_date.isoformat() if r.due_date else None,
-                                                        "date": new.isoformat(), "reason": note, "at": date.today().isoformat()}]
+                                                        "date": new.isoformat(), "reason": note, "at": date.today().isoformat(),
+                                                        # okno § 9 ust. 2 - pilnowane przy sporządzeniu oceny
+                                                        "position_change": {"kind": "early_review",
+                                                                            "changed": changed.isoformat(),
+                                                                            "earliest": (changed - timedelta(days=7)).isoformat(),
+                                                                            "latest": new.isoformat()}}]
             r.due_date = new
             effects.append({"review_id": r.id, "effect": "review_due", "due_date": new.isoformat()})
             notify(session, r.reviewer_id, f"Zmiana stanowiska: sporządź ocenę - {e.full_name}",
@@ -268,7 +273,10 @@ def position_change(session: Session, e: Employee, changed: date) -> list[dict]:
         if effects and effects[-1]["effect"] == "criteria_reopened":
             r.due_date_history = [*r.due_date_history, {"from": r.due_date.isoformat() if r.due_date else None,
                                                         "date": r.due_date.isoformat() if r.due_date else None,
-                                                        "reason": note, "at": date.today().isoformat()}]
+                                                        "reason": note, "at": date.today().isoformat(),
+                                                        "position_change": {"kind": "criteria_reopened",
+                                                                            "changed": changed.isoformat(),
+                                                                            "latest": r.criteria_deadline.isoformat()}}]
         notify_employee(session, r, "Zmiana stanowiska a ocena okresowa", note)
         session.add(r)
     return effects
