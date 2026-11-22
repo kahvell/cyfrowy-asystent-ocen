@@ -131,6 +131,18 @@ Wszystkie osoby i zdarzenia w danych demo są fikcyjne.
 
 ## Architektura w skrócie
 
+### Diagram architektury
+
+Dwa warianty uruchomienia: **demo w internecie** na serwerze (nginx + certbot, publiczny adres) oraz **praca w urzędzie** na Windows 11 z modelem AI hostowanym lokalnie.
+
+![Diagram architektury — komponenty, kontenery i przepływ danych w dwóch wariantach uruchomienia](docs/architektura/architektura-systemu.png)
+
+Poglądowe przedstawienie systemu (użytkownicy, komponenty, przepływ danych):
+
+![Architektura systemu — ujęcie poglądowe](docs/architektura/architektura-pogladowa.png)
+
+### W skrócie
+
 ```
 frontend (Next.js 16, Tailwind, TanStack Query, Recharts)
    │  /api/* (rewrite, bez CORS)
